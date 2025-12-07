@@ -8,11 +8,10 @@ import { ThreeVisualizer } from "@/components/visualizer/three-visualizer"
 import { Deck } from "@/components/dj/deck"
 import { Mixer } from "@/components/dj/mixer"
 import { MusicLibrary } from "@/components/library/music-library"
-import { GrokCopilot } from "@/components/grok/grok-copilot"
-import { VoiceControl } from "@/components/grok/voice-control"
+import { GrokChatPanel } from "@/components/grok/grok-chat-panel"
 import { VisualizerControls } from "@/components/dj/visualizer-controls"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp, Disc3, Mic, PanelLeftClose, PanelRightClose } from "lucide-react"
+import { ChevronDown, ChevronUp, Disc3, PanelLeftClose, Sliders, Sparkles } from "lucide-react"
 
 export default function DJSystem() {
   const { tracks } = useTracks()
@@ -43,9 +42,8 @@ export default function DJSystem() {
   const [trackA, setTrackA] = useState<Track | null>(null)
   const [trackB, setTrackB] = useState<Track | null>(null)
   const [showLibrary, setShowLibrary] = useState(true)
-  const [showCopilot, setShowCopilot] = useState(true)
-  const [showVoiceControl, setShowVoiceControl] = useState(false)
   const [controlsExpanded, setControlsExpanded] = useState(true)
+  const [activePanel, setActivePanel] = useState<"dj" | "grok">("grok")
   const [bpmA, setBpmA] = useState<number | null>(null)
   const [bpmB, setBpmB] = useState<number | null>(null)
 
@@ -206,7 +204,7 @@ export default function DJSystem() {
     <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
       <div
         className={`absolute left-0 right-0 z-0 transition-all duration-500 ${
-          controlsExpanded ? "top-0 bottom-[40%]" : "inset-0"
+          controlsExpanded ? "top-0 bottom-[45%]" : "inset-0"
         }`}
       >
         <ThreeVisualizer analyserData={analyserData} musicObject={musicObject} />
@@ -239,24 +237,6 @@ export default function DJSystem() {
               <PanelLeftClose className="h-4 w-4 mr-1" />
               Library
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCopilot(!showCopilot)}
-              className={`h-7 px-2 ${showCopilot ? "text-cyan-400" : "text-slate-400"}`}
-            >
-              Grok
-              <PanelRightClose className="h-4 w-4 ml-1" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowVoiceControl(!showVoiceControl)}
-              className={`h-7 px-2 ${showVoiceControl ? "text-green-400" : "text-slate-400"}`}
-            >
-              <Mic className="h-4 w-4 mr-1" />
-              Voice
-            </Button>
           </div>
         </header>
 
@@ -266,136 +246,161 @@ export default function DJSystem() {
               <MusicLibrary onLoadToDeck={handleLoadToDeck} />
             </div>
           )}
-
-          {showVoiceControl ? (
-            <div className="pointer-events-auto absolute right-0 top-0 bottom-0 w-72 p-2 overflow-hidden bg-slate-950/70 backdrop-blur-sm border-l border-cyan-500/20">
-              <VoiceControl
-                trackA={trackA}
-                trackB={trackB}
-                musicObject={musicObject}
-                getAnalyserData={getAnalyserData}
-                onApplySettings={handleApplyPreset}
-                onAction={handleVoiceAction}
-                onLoadTrack={handleLoadToDeck}
-                tracks={tracks}
-              />
-            </div>
-          ) : showCopilot ? (
-            <div className="pointer-events-auto absolute right-0 top-0 bottom-0 w-72 p-2 overflow-hidden bg-slate-950/70 backdrop-blur-sm border-l border-cyan-500/20">
-              <GrokCopilot
-                trackA={trackA}
-                trackB={trackB}
-                musicObject={musicObject}
-                tracks={tracks}
-                transitionState={transitionState}
-                onApplyTransition={handleApplyTransition}
-                onApplyPreset={handleApplyPreset}
-                onLoadTrack={handleLoadToDeck}
-                onCancelTransition={cancelTransition}
-              />
-            </div>
-          ) : null}
         </div>
 
         <div className="pointer-events-auto">
-          <button
-            onClick={() => setControlsExpanded(!controlsExpanded)}
-            className="w-full flex items-center justify-center py-1 bg-slate-950/70 backdrop-blur-sm border-t border-purple-500/20 hover:bg-slate-900/80 transition-colors"
-          >
-            {controlsExpanded ? (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronUp className="h-4 w-4 text-slate-400" />
-            )}
-          </button>
+          {/* Panel Tabs */}
+          <div className="bg-slate-950/90 backdrop-blur-sm border-t border-purple-500/20 flex items-center justify-center gap-2 py-2">
+            <button
+              onClick={() => {
+                setActivePanel("grok")
+                if (!controlsExpanded) setControlsExpanded(true)
+              }}
+              className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                activePanel === "grok"
+                  ? "bg-gradient-to-r from-purple-600 to-cyan-600 text-white shadow-lg"
+                  : "bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+              }`}
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>Grok AI Chat</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActivePanel("dj")
+                if (!controlsExpanded) setControlsExpanded(true)
+              }}
+              className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${
+                activePanel === "dj"
+                  ? "bg-gradient-to-r from-purple-600 to-cyan-600 text-white shadow-lg"
+                  : "bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+              }`}
+            >
+              <Sliders className="h-4 w-4" />
+              <span>DJ Controls</span>
+            </button>
+
+            <button
+              onClick={() => setControlsExpanded(!controlsExpanded)}
+              className="ml-4 p-2 rounded-full bg-slate-800/50 text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
+            >
+              {controlsExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
+            </button>
+          </div>
 
           {controlsExpanded && (
-            <div className="bg-slate-950/80 backdrop-blur-xl border-t border-purple-500/20 p-3">
-              <div className="max-w-5xl mx-auto flex gap-3">
-                <div className="flex-1">
-                  <Deck
-                    deck="A"
-                    track={trackA}
-                    isPlaying={isPlayingA}
-                    currentTime={currentTimeA}
-                    duration={durationA}
-                    onPlay={() => play("A")}
-                    onPause={() => pause("A")}
-                    onSeek={(time) => seek("A", time)}
-                    onGainChange={(gain) =>
-                      updateMusicObject({
-                        tracks: {
-                          ...musicObject.tracks,
-                          A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
-                        },
-                      })
-                    }
-                    onTempoChange={(playbackRate) =>
-                      updateMusicObject({
-                        tracks: {
-                          ...musicObject.tracks,
-                          A: musicObject.tracks.A ? { ...musicObject.tracks.A, playbackRate } : null,
-                        },
-                      })
-                    }
-                    gain={musicObject.tracks.A?.gain}
-                    playbackRate={musicObject.tracks.A?.playbackRate ?? 1}
-                  />
-                </div>
+            <div className="bg-slate-950/90 backdrop-blur-xl border-t border-purple-500/20 p-4 max-h-[45vh] overflow-y-auto">
+              <div className="max-w-7xl mx-auto">
+                {activePanel === "dj" ? (
+                  /* DJ Controls Panel */
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <Deck
+                        deck="A"
+                        track={trackA}
+                        isPlaying={isPlayingA}
+                        currentTime={currentTimeA}
+                        duration={durationA}
+                        onPlay={() => play("A")}
+                        onPause={() => pause("A")}
+                        onSeek={(time) => seek("A", time)}
+                        onGainChange={(gain) =>
+                          updateMusicObject({
+                            tracks: {
+                              ...musicObject.tracks,
+                              A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
+                            },
+                          })
+                        }
+                        onTempoChange={(playbackRate) =>
+                          updateMusicObject({
+                            tracks: {
+                              ...musicObject.tracks,
+                              A: musicObject.tracks.A ? { ...musicObject.tracks.A, playbackRate } : null,
+                            },
+                          })
+                        }
+                        gain={musicObject.tracks.A?.gain}
+                        playbackRate={musicObject.tracks.A?.playbackRate ?? 1}
+                      />
+                    </div>
 
-                <div className="w-56">
-                  <Mixer
+                    <div className="w-56">
+                      <Mixer
+                        musicObject={musicObject}
+                        onCrossfadeChange={setCrossfade}
+                        onEQChange={(band, value) =>
+                          updateMusicObject({
+                            eq: { ...musicObject.eq, [band]: value },
+                          })
+                        }
+                        onFilterChange={(cutoff) =>
+                          updateMusicObject({
+                            filter: { ...musicObject.filter, cutoff },
+                          })
+                        }
+                        onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
+                        onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
+                        onMasterGainChange={(value) => updateMusicObject({ masterGain: value })}
+                        onIsolationChange={handleIsolationChange}
+                        bpmA={bpmA}
+                        bpmB={bpmB}
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <Deck
+                        deck="B"
+                        track={trackB}
+                        isPlaying={isPlayingB}
+                        currentTime={currentTimeB}
+                        duration={durationB}
+                        onPlay={() => play("B")}
+                        onPause={() => pause("B")}
+                        onSeek={(time) => seek("B", time)}
+                        onGainChange={(gain) =>
+                          updateMusicObject({
+                            tracks: {
+                              ...musicObject.tracks,
+                              B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
+                            },
+                          })
+                        }
+                        onTempoChange={(playbackRate) =>
+                          updateMusicObject({
+                            tracks: {
+                              ...musicObject.tracks,
+                              B: musicObject.tracks.B ? { ...musicObject.tracks.B, playbackRate } : null,
+                            },
+                          })
+                        }
+                        gain={musicObject.tracks.B?.gain}
+                        playbackRate={musicObject.tracks.B?.playbackRate ?? 1}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  /* Grok Chat Panel */
+                  <GrokChatPanel
+                    trackA={trackA}
+                    trackB={trackB}
                     musicObject={musicObject}
-                    onCrossfadeChange={setCrossfade}
-                    onEQChange={(band, value) =>
-                      updateMusicObject({
-                        eq: { ...musicObject.eq, [band]: value },
-                      })
-                    }
-                    onFilterChange={(cutoff) =>
-                      updateMusicObject({
-                        filter: { ...musicObject.filter, cutoff },
-                      })
-                    }
-                    onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
-                    onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
-                    onMasterGainChange={(value) => updateMusicObject({ masterGain: value })}
-                    onIsolationChange={handleIsolationChange}
-                    bpmA={bpmA}
-                    bpmB={bpmB}
+                    tracks={tracks}
+                    transitionState={transitionState}
+                    getAnalyserData={getAnalyserData}
+                    onApplySettings={handleApplyPreset}
+                    onApplyTransition={handleApplyTransition}
+                    onApplyPreset={handleApplyPreset}
+                    onAction={handleVoiceAction}
+                    onLoadTrack={handleLoadToDeck}
+                    onCancelTransition={cancelTransition}
                   />
-                </div>
-
-                <div className="flex-1">
-                  <Deck
-                    deck="B"
-                    track={trackB}
-                    isPlaying={isPlayingB}
-                    currentTime={currentTimeB}
-                    duration={durationB}
-                    onPlay={() => play("B")}
-                    onPause={() => pause("B")}
-                    onSeek={(time) => seek("B", time)}
-                    onGainChange={(gain) =>
-                      updateMusicObject({
-                        tracks: {
-                          ...musicObject.tracks,
-                          B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
-                        },
-                      })
-                    }
-                    onTempoChange={(playbackRate) =>
-                      updateMusicObject({
-                        tracks: {
-                          ...musicObject.tracks,
-                          B: musicObject.tracks.B ? { ...musicObject.tracks.B, playbackRate } : null,
-                        },
-                      })
-                    }
-                    gain={musicObject.tracks.B?.gain}
-                    playbackRate={musicObject.tracks.B?.playbackRate ?? 1}
-                  />
-                </div>
+                )}
               </div>
             </div>
           )}
