@@ -228,6 +228,191 @@ const WaveformVisualizer = memo(function WaveformVisualizer({
   )
 })
 
+const GrokLogoVisualizer = memo(function GrokLogoVisualizer({
+  analyserData,
+  sensitivity,
+  colorScheme,
+}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number; colorScheme: MusicObject["colorScheme"] }) {
+  const groupRef = useRef<THREE.Group>(null)
+  const ringsRef = useRef<THREE.Group>(null)
+  const gLetterRef = useRef<THREE.Group>(null)
+  const particlesRef = useRef<THREE.Points>(null)
+  const scheme = colorSchemes[colorScheme]
+
+  // Create orbital particles for ring systems
+  const particleCount = 300
+  const particlePositions = useMemo(() => {
+    const positions = new Float32Array(particleCount * 3)
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2
+      const ringIndex = i % 3
+      const radius = 3.5 + ringIndex * 0.8 + Math.random() * 0.3
+      const height = (Math.random() - 0.5) * 0.2
+      
+      positions[i * 3] = Math.cos(angle) * radius
+      positions[i * 3 + 1] = height
+      positions[i * 3 + 2] = Math.sin(angle) * radius * 0.3 // Flatten to match tilted perspective
+    }
+    return positions
+  }, [])
+
+  const particleColors = useMemo(() => {
+    const colors = new Float32Array(particleCount * 3)
+    for (let i = 0; i < particleCount; i++) {
+      const t = (i % 100) / 100
+      colors[i * 3] = scheme.primaryRGB[0] * (1 - t) + scheme.secondaryRGB[0] * t
+      colors[i * 3 + 1] = scheme.primaryRGB[1] * (1 - t) + scheme.secondaryRGB[1] * t
+      colors[i * 3 + 2] = scheme.primaryRGB[2] * (1 - t) + scheme.secondaryRGB[2] * t
+    }
+    return colors
+  }, [scheme])
+
+  useFrame(({ clock }) => {
+    if (!groupRef.current || !ringsRef.current || !gLetterRef.current || !particlesRef.current) return
+
+    const time = clock.getElapsedTime()
+    
+    // Calculate frequency bands
+    const bassFreq = analyserData.frequency.slice(0, 32).reduce((sum, val) => sum + val, 0) / 32 / 255
+    const midFreq = analyserData.frequency.slice(32, 96).reduce((sum, val) => sum + val, 0) / 64 / 255
+    const highFreq = analyserData.frequency.slice(96).reduce((sum, val) => sum + val, 0) / 64 / 255
+
+    // Animate rings with different frequencies
+    ringsRef.current.children.forEach((ring, i) => {
+      const freqInfluence = i === 0 ? bassFreq : i === 1 ? midFreq : highFreq
+      const scale = 1 + freqInfluence * sensitivity * 0.2
+      ring.scale.setScalar(scale)
+      ring.rotation.z = time * (0.3 + freqInfluence * 1.5) * (i % 2 === 0 ? 1 : -1)
+    })
+
+    // G letter glow and scale
+    const gScale = 1 + bassFreq * sensitivity * 0.15
+    gLetterRef.current.scale.setScalar(gScale)
+    
+    gLetterRef.current.children.forEach((part) => {
+      if (part.material && 'emissiveIntensity' in part.material) {
+        (part.material as any).emissiveIntensity = 0.4 + highFreq * sensitivity * 0.6
+      }
+    })
+
+    // Update orbital particles
+    const positions = particlesRef.current.geometry.attributes.position.array as Float32Array
+    for (let i = 0; i < particleCount; i++) {
+      const baseAngle = (i / particleCount) * Math.PI * 2
+      const ringIndex = i % 3
+      const freqMod = ringIndex === 0 ? bassFreq : ringIndex === 1 ? midFreq : highFreq
+      
+      const angle = baseAngle + time * (0.4 + freqMod) * (ringIndex % 2 === 0 ? 1 : -1)
+      const radius = 3.5 + ringIndex * 0.8 + Math.sin(time * 2 + i * 0.1) * 0.2 + freqMod * 0.5
+      const height = Math.sin(time + i * 0.05) * 0.1 + freqMod * 0.3
+      
+      positions[i * 3] = Math.cos(angle) * radius
+      positions[i * 3 + 1] = height
+      positions[i * 3 + 2] = Math.sin(angle) * radius * 0.3
+    }
+    particlesRef.current.geometry.attributes.position.needsUpdate = true
+
+    // Overall rotation and tilt to match image perspective
+    groupRef.current.rotation.y = time * 0.1
+    groupRef.current.rotation.x = Math.PI * 0.15 + Math.sin(time * 0.5) * 0.1
+  })
+
+  return (
+    <group ref={groupRef}>
+      {/* Multiple Saturn-like Rings */}
+      <group ref={ringsRef} rotation={[Math.PI * 0.15, 0, 0]}>
+        {/* Outer ring - largest */}
+        <mesh>
+          <torusGeometry args={[4.2, 0.08, 12, 64]} />
+          <meshStandardMaterial 
+            color={scheme.primary}
+            emissive={scheme.primary}
+            emissiveIntensity={0.2}
+            transparent
+            opacity={0.6}
+          />
+        </mesh>
+        
+        {/* Middle ring */}
+        <mesh>
+          <torusGeometry args={[3.6, 0.12, 16, 64]} />
+          <meshStandardMaterial 
+            color={scheme.secondary}
+            emissive={scheme.secondary}
+            emissiveIntensity={0.3}
+            transparent
+            opacity={0.8}
+          />
+        </mesh>
+        
+        {/* Inner ring */}
+        <mesh>
+          <torusGeometry args={[3.0, 0.15, 16, 64]} />
+          <meshStandardMaterial 
+            color={scheme.primary}
+            emissive={scheme.primary}
+            emissiveIntensity={0.4}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      </group>
+
+      {/* Grok Logo - Circle with diagonal slash */}
+      <group ref={gLetterRef}>
+        {/* Main circle ring */}
+        <mesh>
+          <torusGeometry args={[1.8, 0.25, 16, 64]} />
+          <meshStandardMaterial 
+            color="#ffffff"
+            emissive="#ffffff"
+            emissiveIntensity={0.6}
+            transparent
+            opacity={0.95}
+          />
+        </mesh>
+        
+      </group>
+
+      {/* Orbital Particles */}
+      <points ref={particlesRef}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" count={particleCount} array={particlePositions} itemSize={3} />
+          <bufferAttribute attach="attributes-color" count={particleCount} array={particleColors} itemSize={3} />
+        </bufferGeometry>
+        <pointsMaterial 
+          size={0.03} 
+          vertexColors 
+          transparent 
+          opacity={0.8}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+
+      {/* Central dark sphere - black hole effect */}
+      <mesh>
+        <sphereGeometry args={[0.9, 32, 32]} />
+        <meshBasicMaterial 
+          color="#000000"
+          transparent
+          opacity={0.95}
+        />
+      </mesh>
+
+      {/* Inner glow sphere */}
+      <mesh>
+        <sphereGeometry args={[1.1, 16, 16]} />
+        <meshBasicMaterial 
+          color={scheme.primary}
+          transparent
+          opacity={0.1}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  )
+})
+
 const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps) {
   const sensitivity = musicObject.visualSensitivity ?? 1
   const mode = musicObject.visualizerMode ?? "particles"
@@ -244,6 +429,7 @@ const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps
       {mode === "cymatic" && <CymaticVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
       {mode === "tunnel" && <TunnelVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
       {mode === "waveform" && <WaveformVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
+      {mode === "grok" && <GrokLogoVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
     </>
   )
 })
