@@ -47,7 +47,7 @@ export function Deck({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border",
+        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border max-w-md",
         "bg-slate-900/60 border-purple-500/30",
         deck === "A" ? "border-l-2 border-l-purple-500" : "border-r-2 border-r-cyan-500",
       )}
@@ -69,8 +69,8 @@ export function Deck({
       <div className="min-h-[40px]">
         {track ? (
           <div className="space-y-0.5">
-            <p className="text-sm font-medium text-white truncate">{track.title}</p>
-            <p className="text-xs text-slate-400 truncate">{track.key || "Key not detected"}</p>
+            <p className="text-sm font-medium text-white truncate max-w-[40ch]">{track.title}</p>
+            <p className="text-xs text-slate-400 truncate max-w-[40ch]">{track.key || "Key not detected"}</p>
           </div>
         ) : (
           <p className="text-sm text-slate-500 italic">No track loaded</p>
