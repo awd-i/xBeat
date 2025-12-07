@@ -403,7 +403,7 @@ export class MusicEngine {
     this.musicObject = { ...this.musicObject, ...obj } as MusicObject
 
     // Master gain
-    if (obj.masterGain !== undefined && this.masterGain) {
+    if (obj.masterGain !== undefined && this.masterGain && isFinite(obj.masterGain)) {
       this.masterGain.gain.value = obj.masterGain
     }
 
@@ -416,27 +416,27 @@ export class MusicEngine {
     if (obj.eq) {
       // Apply to both decks
       for (const deck of [this.deckA, this.deckB]) {
-        if (deck.eqLow) deck.eqLow.gain.value = obj.eq.low
-        if (deck.eqMid) deck.eqMid.gain.value = obj.eq.mid
-        if (deck.eqHigh) deck.eqHigh.gain.value = obj.eq.high
+        if (deck.eqLow && isFinite(obj.eq.low)) deck.eqLow.gain.value = obj.eq.low
+        if (deck.eqMid && isFinite(obj.eq.mid)) deck.eqMid.gain.value = obj.eq.mid
+        if (deck.eqHigh && isFinite(obj.eq.high)) deck.eqHigh.gain.value = obj.eq.high
       }
     }
 
     // Filter
     if (obj.filter && this.filter) {
       this.filter.type = obj.filter.type
-      this.filter.frequency.value = obj.filter.cutoff
-      this.filter.Q.value = obj.filter.q
+      if (isFinite(obj.filter.cutoff)) this.filter.frequency.value = obj.filter.cutoff
+      if (isFinite(obj.filter.q)) this.filter.Q.value = obj.filter.q
     }
 
     // Reverb
-    if (obj.reverbAmount !== undefined && this.reverbGain && this.dryGain) {
+    if (obj.reverbAmount !== undefined && this.reverbGain && this.dryGain && isFinite(obj.reverbAmount)) {
       this.reverbGain.gain.value = obj.reverbAmount
       this.dryGain.gain.value = 1 - obj.reverbAmount * 0.5
     }
 
     // Delay
-    if (obj.delayAmount !== undefined && this.delayFeedback && this.delayWet) {
+    if (obj.delayAmount !== undefined && this.delayFeedback && this.delayWet && isFinite(obj.delayAmount)) {
       this.delayFeedback.gain.value = obj.delayAmount * 0.6
       this.delayWet.gain.value = obj.delayAmount // Update delay wet gain
     }
@@ -451,20 +451,20 @@ export class MusicEngine {
           if (settings.gain !== undefined && deck.gain) {
             // This is individual deck gain, crossfade handles mix
           }
-          if (settings.pan !== undefined && deck.panNode) {
+          if (settings.pan !== undefined && deck.panNode && isFinite(settings.pan)) {
             deck.panNode.pan.value = settings.pan
           }
-          if (settings.playbackRate !== undefined && this.activeSources[deckKey]) {
+          if (settings.playbackRate !== undefined && this.activeSources[deckKey] && isFinite(settings.playbackRate)) {
             this.activeSources[deckKey].playbackRate.value = settings.playbackRate
           }
 
-          if ((settings as any).bassIsolation !== undefined && deck.bassIsolateGain) {
+          if ((settings as any).bassIsolation !== undefined && deck.bassIsolateGain && isFinite((settings as any).bassIsolation)) {
             deck.bassIsolateGain.gain.value = (settings as any).bassIsolation
           }
-          if ((settings as any).voiceIsolation !== undefined && deck.voiceIsolateGain) {
+          if ((settings as any).voiceIsolation !== undefined && deck.voiceIsolateGain && isFinite((settings as any).voiceIsolation)) {
             deck.voiceIsolateGain.gain.value = (settings as any).voiceIsolation
           }
-          if ((settings as any).melodyIsolation !== undefined && deck.melodyIsolateGain) {
+          if ((settings as any).melodyIsolation !== undefined && deck.melodyIsolateGain && isFinite((settings as any).melodyIsolation)) {
             deck.melodyIsolateGain.gain.value = (settings as any).melodyIsolation
           }
         }
@@ -558,7 +558,7 @@ export class MusicEngine {
           plan.filterAutomation.map((p) => ({ t: p.t, value: p.cutoff })),
           progress,
         )
-        if (this.filter) {
+        if (this.filter && isFinite(filterCutoff)) {
           this.filter.frequency.value = filterCutoff
         }
       }
@@ -575,9 +575,31 @@ export class MusicEngine {
           plan.fxAutomation.map((p) => ({ t: p.t, value: p.delay })),
           progress,
         )
-        if (this.reverbGain) this.reverbGain.gain.value = reverbValue
-        if (this.delayFeedback) this.delayFeedback.gain.value = delayValue * 0.6
-        if (this.delayWet) this.delayWet.gain.value = delayValue
+        if (this.reverbGain && isFinite(reverbValue)) this.reverbGain.gain.value = reverbValue
+        if (this.delayFeedback && isFinite(delayValue)) this.delayFeedback.gain.value = delayValue * 0.6
+        if (this.delayWet && isFinite(delayValue)) this.delayWet.gain.value = delayValue
+      }
+
+      // Interpolate tempo for deck A if present
+      if (plan.deckATempoAutomation?.length) {
+        const playbackRate = this.interpolateAutomation(
+          plan.deckATempoAutomation.map((p) => ({ t: p.t, value: p.playbackRate })),
+          progress,
+        )
+        if (this.activeSources.A && isFinite(playbackRate)) {
+          this.activeSources.A.playbackRate.value = playbackRate
+        }
+      }
+
+      // Interpolate tempo for deck B if present
+      if (plan.deckBTempoAutomation?.length) {
+        const playbackRate = this.interpolateAutomation(
+          plan.deckBTempoAutomation.map((p) => ({ t: p.t, value: p.playbackRate })),
+          progress,
+        )
+        if (this.activeSources.B && isFinite(playbackRate)) {
+          this.activeSources.B.playbackRate.value = playbackRate
+        }
       }
 
       // Update transition state

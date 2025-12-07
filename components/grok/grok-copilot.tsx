@@ -90,7 +90,9 @@ export function GrokCopilot({
 
       const { plan } = await response.json()
       setLastTransitionPlan(plan)
-      addCoachMessage(plan.explanation, "info")
+      if (plan.explanation) {
+        addCoachMessage(plan.explanation, "info")
+      }
     } catch (error) {
       addCoachMessage("Failed to generate transition plan. Please try again.", "tip")
     } finally {
@@ -250,7 +252,9 @@ export function GrokCopilot({
                   <p className="text-xs font-semibold text-purple-300">Transition Plan</p>
                   <span className="text-xs text-slate-400">{lastTransitionPlan.durationSeconds}s</span>
                 </div>
-                <p className="text-xs text-slate-300 mb-3">{lastTransitionPlan.explanation}</p>
+                {lastTransitionPlan.explanation && (
+                  <p className="text-xs text-slate-300 mb-3">{lastTransitionPlan.explanation}</p>
+                )}
                 <div className="flex gap-2">
                   <Button
                     size="sm"

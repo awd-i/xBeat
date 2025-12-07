@@ -57,21 +57,40 @@ export default function DJSystem() {
 
       await loadTrack(deck, track.url)
 
+      // Initialize track settings with default playbackRate
+      const trackSettings = {
+        id: track.id,
+        url: track.url,
+        title: track.title,
+        artist: track.artist,
+        gain: 1,
+        pan: 0,
+        playbackRate: 1,
+        enabled: true,
+      }
+
+      updateMusicObject({
+        tracks: {
+          ...musicObject.tracks,
+          [deck]: trackSettings,
+        },
+      })
+
       if (deck === "A") {
         setTrackA(track)
         setTimeout(() => {
-          const bpm = musicEngine?.getBPM("A")
+          const bpm = musicEngine?.getBPM("A") ?? null
           setBpmA(bpm)
         }, 1000)
       } else {
         setTrackB(track)
         setTimeout(() => {
-          const bpm = musicEngine?.getBPM("B")
+          const bpm = musicEngine?.getBPM("B") ?? null
           setBpmB(bpm)
         }, 1000)
       }
     },
-    [isInitialized, initialize, loadTrack, musicEngine],
+    [isInitialized, initialize, loadTrack, musicEngine, musicObject.tracks, updateMusicObject],
   )
 
   const handleApplyTransition = useCallback(
@@ -185,7 +204,11 @@ export default function DJSystem() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
-      <div className="absolute inset-0 z-0">
+      <div
+        className={`absolute left-0 right-0 z-0 transition-all duration-500 ${
+          controlsExpanded ? "top-0 bottom-[40%]" : "inset-0"
+        }`}
+      >
         <ThreeVisualizer analyserData={analyserData} musicObject={musicObject} />
       </div>
 
@@ -306,6 +329,16 @@ export default function DJSystem() {
                         },
                       })
                     }
+                    onTempoChange={(playbackRate) =>
+                      updateMusicObject({
+                        tracks: {
+                          ...musicObject.tracks,
+                          A: musicObject.tracks.A ? { ...musicObject.tracks.A, playbackRate } : null,
+                        },
+                      })
+                    }
+                    gain={musicObject.tracks.A?.gain}
+                    playbackRate={musicObject.tracks.A?.playbackRate ?? 1}
                   />
                 </div>
 
@@ -325,6 +358,7 @@ export default function DJSystem() {
                     }
                     onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
                     onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
+                    onMasterGainChange={(value) => updateMusicObject({ masterGain: value })}
                     onIsolationChange={handleIsolationChange}
                     bpmA={bpmA}
                     bpmB={bpmB}
@@ -349,6 +383,16 @@ export default function DJSystem() {
                         },
                       })
                     }
+                    onTempoChange={(playbackRate) =>
+                      updateMusicObject({
+                        tracks: {
+                          ...musicObject.tracks,
+                          B: musicObject.tracks.B ? { ...musicObject.tracks.B, playbackRate } : null,
+                        },
+                      })
+                    }
+                    gain={musicObject.tracks.B?.gain}
+                    playbackRate={musicObject.tracks.B?.playbackRate ?? 1}
                   />
                 </div>
               </div>

@@ -16,7 +16,9 @@ interface DeckProps {
   onPause: () => void
   onSeek: (time: number) => void
   onGainChange: (gain: number) => void
+  onTempoChange: (rate: number) => void
   gain?: number
+  playbackRate?: number
 }
 
 function formatTime(seconds: number): string {
@@ -35,9 +37,12 @@ export function Deck({
   onPause,
   onSeek,
   onGainChange,
+  onTempoChange,
   gain = 1,
+  playbackRate = 1,
 }: DeckProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const adjustedBPM = track?.bpm ? Math.round(track.bpm * playbackRate) : null
 
   return (
     <div
@@ -52,7 +57,12 @@ export function Deck({
         <span className={cn("text-xs font-bold tracking-wider", deck === "A" ? "text-purple-400" : "text-cyan-400")}>
           DECK {deck}
         </span>
-        {track?.bpm && <span className="text-xs text-slate-400 font-mono">{track.bpm} BPM</span>}
+        {adjustedBPM && (
+          <span className="text-xs font-mono">
+            <span className={cn(deck === "A" ? "text-purple-400" : "text-cyan-400")}>{adjustedBPM}</span>
+            <span className="text-slate-500"> BPM</span>
+          </span>
+        )}
       </div>
 
       {/* Track Info */}
@@ -60,7 +70,7 @@ export function Deck({
         {track ? (
           <div className="space-y-0.5">
             <p className="text-sm font-medium text-white truncate">{track.title}</p>
-            <p className="text-xs text-slate-400 truncate">{track.artist}</p>
+            <p className="text-xs text-slate-400 truncate">{track.key || "Key not detected"}</p>
           </div>
         ) : (
           <p className="text-sm text-slate-500 italic">No track loaded</p>
@@ -146,6 +156,26 @@ export function Deck({
             className="flex-1"
           />
         </div>
+      </div>
+
+      {/* Tempo Control */}
+      <div className="space-y-1">
+        <div className="flex justify-between items-center">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider">Tempo</span>
+          <span className="text-[10px] font-mono text-slate-500">
+            {playbackRate > 1 ? "+" : ""}
+            {((playbackRate - 1) * 100).toFixed(1)}%
+          </span>
+        </div>
+        <Slider
+          value={[playbackRate * 100]}
+          onValueChange={([v]) => onTempoChange(v / 100)}
+          min={20}
+          max={180}
+          step={0.5}
+          disabled={!track}
+          className="flex-1"
+        />
       </div>
 
       {/* Track metadata */}

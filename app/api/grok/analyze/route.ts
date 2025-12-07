@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { object: analysis } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: trackAnalysisSchema,
       prompt: `Analyze this music track based on its metadata and provide a detailed analysis:
 

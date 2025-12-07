@@ -132,18 +132,17 @@ export function MusicLibrary({ onLoadToDeck }: MusicLibraryProps) {
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{track.title}</p>
-                    <p className="text-xs text-slate-400 truncate">{track.artist}</p>
+                    <p className="text-xs text-slate-400 truncate">
+                      {track.bpm || track.key
+                        ? `${track.bpm ? `${Math.round(track.bpm)} BPM` : ""}${track.bpm && track.key ? " • " : ""}${track.key || ""}`
+                        : "Not analyzed"}
+                    </p>
 
                     {track.analyzed && (
                       <div className="flex flex-wrap gap-1 mt-1">
                         {track.genre && (
                           <span className="px-1.5 py-0.5 text-[9px] rounded bg-purple-500/20 text-purple-300">
                             {track.genre}
-                          </span>
-                        )}
-                        {track.bpm && (
-                          <span className="px-1.5 py-0.5 text-[9px] rounded bg-cyan-500/20 text-cyan-300">
-                            {track.bpm} BPM
                           </span>
                         )}
                       </div>

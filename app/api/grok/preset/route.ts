@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { object: presetData } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: presetSchema,
       prompt: `Create a DJ mixer preset based on this description:
 
