@@ -203,7 +203,8 @@ const WaveformVisualizer = memo(function WaveformVisualizer({
 })
 
 const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps) {
-  const sensitivity = musicObject.visualSensitivity
+  const sensitivity = musicObject.visualSensitivity ?? 1
+  const mode = musicObject.visualizerMode ?? "particles"
 
   return (
     <>
@@ -211,18 +212,10 @@ const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps
       <pointLight position={[10, 10, 10]} intensity={1} color="#8b5cf6" />
       <pointLight position={[-10, -10, -10]} intensity={0.5} color="#06b6d4" />
 
-      {musicObject.visualizerMode === "particles" && (
-        <ParticleVisualizer analyserData={analyserData} sensitivity={sensitivity} />
-      )}
-      {musicObject.visualizerMode === "cymatic" && (
-        <CymaticVisualizer analyserData={analyserData} sensitivity={sensitivity} />
-      )}
-      {musicObject.visualizerMode === "tunnel" && (
-        <TunnelVisualizer analyserData={analyserData} sensitivity={sensitivity} />
-      )}
-      {musicObject.visualizerMode === "waveform" && (
-        <WaveformVisualizer analyserData={analyserData} sensitivity={sensitivity} />
-      )}
+      {mode === "particles" && <ParticleVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
+      {mode === "cymatic" && <CymaticVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
+      {mode === "tunnel" && <TunnelVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
+      {mode === "waveform" && <WaveformVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
     </>
   )
 })
