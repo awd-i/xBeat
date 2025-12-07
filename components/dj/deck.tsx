@@ -47,7 +47,7 @@ export function Deck({
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border max-w-md",
+        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border",
         "bg-slate-900/60 border-purple-500/30",
         deck === "A" ? "border-l-2 border-l-purple-500" : "border-r-2 border-r-cyan-500",
       )}
