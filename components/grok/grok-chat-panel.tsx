@@ -65,6 +65,7 @@ export function GrokChatPanel({
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [ttsEnabled, setTtsEnabled] = useState(true)
   const [grokVoice, setGrokVoice] = useState<GrokVoice>("Ara")
+  const [hasReceivedFirstMessage, setHasReceivedFirstMessage] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -335,6 +336,20 @@ export function GrokChatPanel({
           return
         }
 
+        // Auto-mute after first message
+        if (!hasReceivedFirstMessage) {
+          setHasReceivedFirstMessage(true)
+          // Speak the first message
+          speakText(fullText)
+          // Then mute for subsequent messages
+          setTimeout(() => {
+            setTtsEnabled(false)
+          }, 100)
+        } else {
+          // Speak if TTS is enabled
+          speakText(fullText)
+        }
+
         // Parse for actions
         const jsonMatch = fullText.match(/```json\n?([\s\S]*?)\n?```/)
         if (jsonMatch) {
@@ -348,8 +363,6 @@ export function GrokChatPanel({
             console.error("Failed to parse action JSON:", e)
           }
         }
-
-        speakText(fullText)
       } catch (error) {
         console.error("Voice command error:", error)
         setLocalMessages((prev) => [
