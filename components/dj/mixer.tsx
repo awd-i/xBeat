@@ -48,7 +48,7 @@ export function Mixer({
         </div>
         <div className="relative">
           <Slider
-            value={[musicObject.crossfader * 100]}
+            value={[(musicObject.crossfader ?? 0.5) * 100]}
             onValueChange={([v]) => onCrossfadeChange(v / 100)}
             max={100}
             step={1}
@@ -73,38 +73,41 @@ export function Mixer({
         <TabsContent value="eq" className="space-y-3 mt-3">
           {/* EQ Section */}
           <div className="grid grid-cols-3 gap-3">
-            {(["high", "mid", "low"] as const).map((band) => (
-              <div key={band} className="flex flex-col items-center gap-2">
-                <Label className="text-[10px] text-slate-400 uppercase">{band}</Label>
-                <div className="h-20 flex items-center">
-                  <Slider
-                    orientation="vertical"
-                    value={[musicObject.eq[band] + 12]}
-                    onValueChange={([v]) => onEQChange(band, v - 12)}
-                    max={24}
-                    step={0.5}
-                    className="h-full"
-                  />
+            {(["high", "mid", "low"] as const).map((band) => {
+              const eqValue = musicObject.eq?.[band] ?? 0
+              return (
+                <div key={band} className="flex flex-col items-center gap-3">
+                  <Label className="text-[10px] text-slate-400 uppercase">{band}</Label>
+                  <div className="h-28 flex items-center overflow-hidden">
+                    <Slider
+                      orientation="vertical"
+                      value={[eqValue + 12]}
+                      onValueChange={([v]) => onEQChange(band, v - 12)}
+                      max={24}
+                      step={0.5}
+                      className="h-full !min-h-0"
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {eqValue > 0 ? "+" : ""}
+                    {eqValue.toFixed(1)}
+                  </span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-500">
-                  {musicObject.eq[band] > 0 ? "+" : ""}
-                  {musicObject.eq[band].toFixed(1)}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* Filter */}
-          <div className="space-y-2">
+          <div className="space-y-2 pt-2">
             <Label className="text-[10px] text-slate-400 uppercase tracking-wider">Filter</Label>
             <Slider
-              value={[(Math.log10(musicObject.filter.cutoff) / Math.log10(20000)) * 100]}
+              value={[(Math.log10(musicObject.filter?.cutoff ?? 20000) / Math.log10(20000)) * 100]}
               onValueChange={([v]) => onFilterChange(Math.pow(10, (v / 100) * Math.log10(20000)))}
               max={100}
               step={1}
             />
             <span className="text-[10px] font-mono text-slate-500 block text-center">
-              {musicObject.filter.cutoff.toFixed(0)} Hz
+              {(musicObject.filter?.cutoff ?? 20000).toFixed(0)} Hz
             </span>
           </div>
         </TabsContent>
@@ -115,25 +118,25 @@ export function Mixer({
             <div className="space-y-2">
               <Label className="text-[10px] text-slate-400 uppercase tracking-wider">Reverb</Label>
               <Slider
-                value={[musicObject.reverbAmount * 100]}
+                value={[(musicObject.reverbAmount ?? 0) * 100]}
                 onValueChange={([v]) => onReverbChange(v / 100)}
                 max={100}
                 step={1}
               />
               <span className="text-[10px] font-mono text-slate-500 block text-center">
-                {(musicObject.reverbAmount * 100).toFixed(0)}%
+                {((musicObject.reverbAmount ?? 0) * 100).toFixed(0)}%
               </span>
             </div>
             <div className="space-y-2">
               <Label className="text-[10px] text-slate-400 uppercase tracking-wider">Delay</Label>
               <Slider
-                value={[musicObject.delayAmount * 100]}
+                value={[(musicObject.delayAmount ?? 0) * 100]}
                 onValueChange={([v]) => onDelayChange(v / 100)}
                 max={100}
                 step={1}
               />
               <span className="text-[10px] font-mono text-slate-500 block text-center">
-                {(musicObject.delayAmount * 100).toFixed(0)}%
+                {((musicObject.delayAmount ?? 0) * 100).toFixed(0)}%
               </span>
             </div>
           </div>
@@ -148,7 +151,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-purple-400">Deck A</div>
                     <Slider
-                      value={[(musicObject.tracks.A as any)?.bassIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.A as any)?.bassIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("A", "bass", v / 100)}
                       max={100}
                       step={1}
@@ -157,7 +160,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-cyan-400">Deck B</div>
                     <Slider
-                      value={[(musicObject.tracks.B as any)?.bassIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.B as any)?.bassIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("B", "bass", v / 100)}
                       max={100}
                       step={1}
@@ -172,7 +175,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-purple-400">Deck A</div>
                     <Slider
-                      value={[(musicObject.tracks.A as any)?.voiceIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.A as any)?.voiceIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("A", "voice", v / 100)}
                       max={100}
                       step={1}
@@ -181,7 +184,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-cyan-400">Deck B</div>
                     <Slider
-                      value={[(musicObject.tracks.B as any)?.voiceIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.B as any)?.voiceIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("B", "voice", v / 100)}
                       max={100}
                       step={1}
@@ -196,7 +199,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-purple-400">Deck A</div>
                     <Slider
-                      value={[(musicObject.tracks.A as any)?.melodyIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.A as any)?.melodyIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("A", "melody", v / 100)}
                       max={100}
                       step={1}
@@ -205,7 +208,7 @@ export function Mixer({
                   <div className="space-y-1">
                     <div className="text-[9px] text-cyan-400">Deck B</div>
                     <Slider
-                      value={[(musicObject.tracks.B as any)?.melodyIsolation * 100 || 0]}
+                      value={[((musicObject.tracks?.B as any)?.melodyIsolation ?? 0) * 100]}
                       onValueChange={([v]) => onIsolationChange("B", "melody", v / 100)}
                       max={100}
                       step={1}
@@ -226,12 +229,12 @@ export function Mixer({
       <div className="space-y-2 pt-2 border-t border-slate-700/50">
         <div className="flex justify-between items-center">
           <Label className="text-[10px] text-slate-400 uppercase tracking-wider">Master</Label>
-          <span className="text-[10px] font-mono text-slate-500">{Math.round(musicObject.masterGain * 100)}%</span>
+          <span className="text-[10px] font-mono text-slate-500">{Math.round((musicObject.masterGain ?? 0.8) * 100)}%</span>
         </div>
         <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all"
-            style={{ width: `${musicObject.masterGain * 100}%` }}
+            style={{ width: `${(musicObject.masterGain ?? 0.8) * 100}%` }}
           />
         </div>
       </div>

@@ -37,7 +37,8 @@ export function useMusicEngine() {
     await engineRef.current.initialize()
     setIsInitialized(true)
 
-    // Start animation loop for analyser data
+    // Start animation loop for analyser data and state sync
+    let lastMusicObjectRef: MusicObject | null = null
     const updateLoop = () => {
       if (engineRef.current) {
         setAnalyserData(engineRef.current.getAnalyserData())
@@ -45,6 +46,14 @@ export function useMusicEngine() {
         setCurrentTimeB(engineRef.current.getCurrentTime("B"))
         setIsPlayingA(engineRef.current.isPlaying("A"))
         setIsPlayingB(engineRef.current.isPlaying("B"))
+        
+        // Sync musicObject from engine to reflect changes from transitions/voice commands
+        // Only update if the reference changed (engine creates new object on updates)
+        const engineMusicObject = engineRef.current.getMusicObject()
+        if (engineMusicObject && engineMusicObject !== lastMusicObjectRef) {
+          lastMusicObjectRef = engineMusicObject
+          setMusicObject(engineMusicObject)
+        }
       }
       animationRef.current = requestAnimationFrame(updateLoop)
     }

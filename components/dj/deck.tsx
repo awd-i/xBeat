@@ -78,10 +78,10 @@ export function Deck({
           onSeek(percent * duration)
         }}
       >
-        {/* Progress Bar */}
+        {/* Progress Bar - no transition to stay in sync with playhead */}
         <div
           className={cn(
-            "absolute inset-y-0 left-0 transition-all",
+            "absolute inset-y-0 left-0",
             deck === "A" ? "bg-purple-500/30" : "bg-cyan-500/30",
           )}
           style={{ width: `${progress}%` }}
@@ -93,17 +93,19 @@ export function Deck({
           style={{ left: `${progress}%` }}
         />
 
-        {/* Fake waveform visualization */}
-        <div className="absolute inset-0 flex items-center justify-center gap-px opacity-50">
-          {Array.from({ length: 60 }).map((_, i) => (
-            <div
-              key={i}
-              className={cn("w-1 rounded-full", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
-              style={{
-                height: `${20 + Math.sin(i * 0.5) * 15 + Math.random() * 10}%`,
-              }}
-            />
-          ))}
+        {/* Fake waveform visualization - starts at left edge */}
+        <div className="absolute inset-0 flex items-center gap-[1px] opacity-50">
+          {Array.from({ length: 100 }).map((_, i) => {
+            // Deterministic height based on index to avoid hydration mismatch
+            const height = Math.round(20 + Math.sin(i * 0.5) * 15 + Math.sin(i * 2.3) * 8 + Math.cos(i * 1.7) * 5)
+            return (
+              <div
+                key={i}
+                className={cn("flex-1 min-w-0 rounded-sm", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
+                style={{ height: `${height}%` }}
+              />
+            )
+          })}
         </div>
 
         {/* Time display */}
