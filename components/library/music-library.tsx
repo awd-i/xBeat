@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import type { Track } from "@/lib/types"
 import { useTracks } from "@/hooks/use-tracks"
 import { Button } from "@/components/ui/button"
@@ -63,6 +63,15 @@ export function MusicLibrary({ onLoadToDeck }: MusicLibraryProps) {
       setAnalyzingId(null)
     }
   }
+
+  // Auto-analyze unanalyzed tracks (one at a time to avoid rate limiting)
+  useEffect(() => {
+    const unanalyzedTrack = tracks.find((t) => !t.analyzed && !analyzingId)
+    if (unanalyzedTrack && !analyzingId) {
+      handleAnalyze(unanalyzedTrack)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracks, analyzingId])
 
   return (
     <div className="flex flex-col h-full bg-slate-900/60 backdrop-blur-xl rounded-xl border border-purple-500/30 overflow-hidden">
