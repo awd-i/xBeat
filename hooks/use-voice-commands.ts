@@ -27,6 +27,12 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
   })
 
   const recognitionRef = useRef<any | null>(null)
+  const onCommandRef = useRef(onCommand)
+
+  // Keep onCommandRef up to date
+  useEffect(() => {
+    onCommandRef.current = onCommand
+  }, [onCommand])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -48,6 +54,12 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
     }
 
     recognition.onerror = (event) => {
+      // Ignore "aborted" and "no-speech" errors - they're normal
+      if (event.error === "aborted" || event.error === "no-speech") {
+        setState((prev) => ({ ...prev, isListening: false }))
+        return
+      }
+      
       setState((prev) => ({
         ...prev,
         isListening: false,
@@ -75,16 +87,18 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
       }))
 
       if (final) {
-        onCommand(final.trim())
+        onCommandRef.current(final.trim())
       }
     }
 
     recognitionRef.current = recognition
 
     return () => {
-      recognition.abort()
+      if (recognition) {
+        recognition.abort()
+      }
     }
-  }, [continuous, language, onCommand])
+  }, [continuous, language])
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current) {
