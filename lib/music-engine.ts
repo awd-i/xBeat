@@ -669,6 +669,10 @@ export class MusicEngine {
     return deckObj.buffer !== null
   }
 
+  getMusicObject(): MusicObject | null {
+    return this.musicObject
+  }
+
   seek(deck: "A" | "B", time: number): void {
     const deckObj = deck === "A" ? this.deckA : this.deckB
     const wasPlaying = deckObj.isPlaying
