@@ -95,28 +95,66 @@ export default function DJSystem() {
     (plan: TransitionPlan) => {
       console.log("[v0] Applying transition plan:", plan)
 
-      // Ensure both decks are playing before starting transition
-      if (!isPlayingA && trackA) {
-        console.log("[v0] Starting deck A for transition")
-        play("A")
+      // Determine which deck is the outgoing (currently playing) track
+      let outgoingDeck: "A" | "B" = "A"
+      let incomingDeck: "A" | "B" = "B"
+      
+      if (isPlayingB && !isPlayingA) {
+        // B is playing, A is not - B is outgoing, A is incoming
+        outgoingDeck = "B"
+        incomingDeck = "A"
+      } else if (!isPlayingA && !isPlayingB) {
+        // Neither playing - start A as outgoing if it has a track
+        if (trackA) {
+          console.log("[v0] Starting deck A as outgoing track")
+          play("A")
+          outgoingDeck = "A"
+          incomingDeck = "B"
+        } else if (trackB) {
+          console.log("[v0] Starting deck B as outgoing track")
+          play("B")
+          outgoingDeck = "B"
+          incomingDeck = "A"
+        }
       }
-      if (!isPlayingB && trackB) {
-        console.log("[v0] Starting deck B for transition")
-        play("B")
+      // If A is playing (or both are playing), A is outgoing by default
+
+      // Set crossfader to the outgoing deck's side
+      const initialCrossfader = outgoingDeck === "A" ? 0 : 1
+      console.log(`[v0] Setting crossfader to ${outgoingDeck} side (${initialCrossfader})`)
+      setCrossfade(initialCrossfader)
+
+      // Start the incoming deck if not playing
+      const incomingTrack = incomingDeck === "A" ? trackA : trackB
+      const incomingPlaying = incomingDeck === "A" ? isPlayingA : isPlayingB
+      
+      if (!incomingPlaying && incomingTrack) {
+        console.log(`[v0] Starting deck ${incomingDeck} as incoming track`)
+        play(incomingDeck)
       }
 
-      // Apply the transition automation
-      applyTransitionPlan(plan)
-
-      // Apply visualizer config if present
-      if (plan.visualizerConfig) {
-        console.log("[v0] Applying visualizer config:", plan.visualizerConfig)
-        updateMusicObject(plan.visualizerConfig)
+      // Handle start delay for timing/phrasing
+      const startDelay = (plan.startDelay || 0) * 1000 // Convert to milliseconds
+      
+      if (startDelay > 0) {
+        console.log(`[v0] Waiting ${plan.startDelay}s for optimal timing (${plan.phaseAlignment || 'phrase alignment'})...`)
       }
 
-      console.log("[v0] Transition started, duration:", plan.durationSeconds, "seconds")
+      setTimeout(() => {
+        // Apply the transition automation
+        console.log(`[v0] Executing ${plan.technique || 'standard'} transition: ${outgoingDeck} → ${incomingDeck}`)
+        applyTransitionPlan(plan)
+
+        // Apply visualizer config if present
+        if (plan.visualizerConfig) {
+          console.log("[v0] Applying visualizer config:", plan.visualizerConfig)
+          updateMusicObject(plan.visualizerConfig)
+        }
+
+        console.log("[v0] Transition started, duration:", plan.durationSeconds, "seconds")
+      }, startDelay)
     },
-    [applyTransitionPlan, updateMusicObject, isPlayingA, isPlayingB, trackA, trackB, play],
+    [applyTransitionPlan, updateMusicObject, isPlayingA, isPlayingB, trackA, trackB, play, setCrossfade],
   )
 
   const handleApplyPreset = useCallback(

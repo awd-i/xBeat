@@ -394,11 +394,15 @@ export class MusicEngine {
     if (!this.deckA.gain || !this.deckB.gain) return
 
     // Equal power crossfade
-    const gainA = Math.cos((value * Math.PI) / 2)
-    const gainB = Math.sin((value * Math.PI) / 2)
+    const crossfadeGainA = Math.cos((value * Math.PI) / 2)
+    const crossfadeGainB = Math.sin((value * Math.PI) / 2)
 
-    this.deckA.gain.gain.value = gainA
-    this.deckB.gain.gain.value = gainB
+    // Multiply crossfade with individual deck gains
+    const deckGainA = this.musicObject.tracks.A?.gain ?? 1
+    const deckGainB = this.musicObject.tracks.B?.gain ?? 1
+
+    this.deckA.gain.gain.value = crossfadeGainA * deckGainA
+    this.deckB.gain.gain.value = crossfadeGainB * deckGainB
   }
 
   updateMusicObject(obj: Partial<MusicObject>): void {
@@ -454,8 +458,9 @@ export class MusicEngine {
         const deck = deckKey === "A" ? this.deckA : this.deckB
 
         if (settings) {
-          if (settings.gain !== undefined && deck.gain) {
-            // This is individual deck gain, crossfade handles mix
+          if (settings.gain !== undefined && deck.gain && isFinite(settings.gain)) {
+            // Individual deck gain - need to reapply crossfade to combine values
+            this.setCrossfade(this.musicObject.crossfader ?? 0.5)
           }
           if (settings.pan !== undefined && deck.panNode && isFinite(settings.pan)) {
             deck.panNode.pan.value = settings.pan
