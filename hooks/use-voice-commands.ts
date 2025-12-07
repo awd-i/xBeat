@@ -22,12 +22,19 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
     transcript: "",
     interimTranscript: "",
     error: null,
-    isSupported:
-      typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window),
+    isSupported: false, // Initialize as false to avoid hydration mismatch
   })
 
   const recognitionRef = useRef<any | null>(null)
   const onCommandRef = useRef(onCommand)
+
+  // Check for speech recognition support on mount (client-side only)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const supported = "SpeechRecognition" in window || "webkitSpeechRecognition" in window
+      setState((prev) => ({ ...prev, isSupported: supported }))
+    }
+  }, [])
 
   // Keep onCommandRef up to date
   useEffect(() => {
