@@ -1,8 +1,21 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { getMusicEngine, type MusicEngine } from "@/lib/music-engine"
+import { getMusicEngine, type MusicEngine, type TransitionState } from "@/lib/music-engine"
 import { type MusicObject, type TransitionPlan, defaultMusicObject } from "@/lib/types"
+
+const defaultTransitionState: TransitionState = {
+  isActive: false,
+  progress: 0,
+  startTime: 0,
+  duration: 0,
+  currentValues: {
+    crossfader: 0.5,
+    filterCutoff: 20000,
+    reverb: 0,
+    delay: 0,
+  },
+}
 
 export function useMusicEngine() {
   const [isInitialized, setIsInitialized] = useState(false)
@@ -17,16 +30,39 @@ export function useMusicEngine() {
     frequency: new Uint8Array(1024),
     timeDomain: new Uint8Array(1024),
   })
+  const [transitionState, setTransitionState] = useState<TransitionState>(defaultTransitionState)
 
   const engineRef = useRef<MusicEngine | null>(null)
   const animationRef = useRef<number | null>(null)
+  const transitionUnsubRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     engineRef.current = getMusicEngine()
 
+    // Subscribe to transition updates
+    transitionUnsubRef.current = engineRef.current.onTransitionUpdate((state) => {
+      setTransitionState(state)
+      // Sync musicObject with transition values when transition is active
+      if (state.isActive) {
+        setMusicObject((prev) => ({
+          ...prev,
+          crossfader: state.currentValues.crossfader,
+          filter: {
+            ...prev.filter,
+            cutoff: state.currentValues.filterCutoff,
+          },
+          reverbAmount: state.currentValues.reverb,
+          delayAmount: state.currentValues.delay,
+        }))
+      }
+    })
+
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
+      }
+      if (transitionUnsubRef.current) {
+        transitionUnsubRef.current()
       }
     }
   }, [])
@@ -111,6 +147,11 @@ export function useMusicEngine() {
     engineRef.current.applyTransitionPlan(plan)
   }, [])
 
+  const cancelTransition = useCallback(() => {
+    if (!engineRef.current) return
+    engineRef.current.cancelTransition()
+  }, [])
+
   const hasTrack = useCallback((deck: "A" | "B") => {
     if (!engineRef.current) return false
     return engineRef.current.hasTrack(deck)
@@ -136,6 +177,7 @@ export function useMusicEngine() {
     setCrossfade,
     updateMusicObject,
     applyTransitionPlan,
+    cancelTransition,
     hasTrack,
     isPlayingA,
     isPlayingB,
@@ -146,6 +188,7 @@ export function useMusicEngine() {
     musicObject,
     analyserData,
     getAnalyserData,
+    transitionState,
     musicEngine: engineRef.current, // Expose the music engine instance
   }
 }

@@ -2,21 +2,25 @@
 
 import { useState } from "react"
 import type { Track, MusicObject, TransitionPlan, Preset, TrackRecommendation } from "@/lib/types"
+import type { TransitionState } from "@/lib/music-engine"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sparkles, Wand2, Lightbulb, Music2, Loader2, ArrowRight, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { TransitionStatus } from "./transition-status"
 
 interface GrokCopilotProps {
   trackA: Track | null
   trackB: Track | null
   musicObject: MusicObject
   tracks: Track[]
+  transitionState?: TransitionState
   onApplyTransition: (plan: TransitionPlan) => void
   onApplyPreset: (preset: Partial<MusicObject>) => void
   onLoadTrack: (track: Track, deck: "A" | "B") => void
+  onCancelTransition?: () => void
 }
 
 interface CoachMessage {
@@ -31,9 +35,11 @@ export function GrokCopilot({
   trackB,
   musicObject,
   tracks,
+  transitionState,
   onApplyTransition,
   onApplyPreset,
   onLoadTrack,
+  onCancelTransition,
 }: GrokCopilotProps) {
   const [transitionPrompt, setTransitionPrompt] = useState("")
   const [presetPrompt, setPresetPrompt] = useState("")
@@ -191,6 +197,11 @@ export function GrokCopilot({
 
         <TabsContent value="transitions" className="flex-1 p-3 overflow-auto">
           <div className="space-y-3">
+            {/* Show active transition status */}
+            {transitionState?.isActive && onCancelTransition && (
+              <TransitionStatus transitionState={transitionState} onCancel={onCancelTransition} />
+            )}
+
             <div className="text-xs text-slate-400">Plan an AI-powered transition between your loaded tracks.</div>
 
             <div className="flex items-center gap-2 text-xs">
