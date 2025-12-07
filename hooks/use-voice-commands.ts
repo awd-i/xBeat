@@ -2,6 +2,17 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 
+// Speech Recognition types
+interface SpeechRecognitionErrorEvent {
+  error: string
+  message?: string
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList
+  resultIndex: number
+}
+
 interface VoiceCommandState {
   isListening: boolean
   transcript: string
@@ -47,7 +58,7 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
       setState((prev) => ({ ...prev, isListening: false, interimTranscript: "" }))
     }
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       setState((prev) => ({
         ...prev,
         isListening: false,
@@ -55,7 +66,7 @@ export function useVoiceCommands({ onCommand, continuous = false, language = "en
       }))
     }
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interim = ""
       let final = ""
 

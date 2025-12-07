@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo, useState } from "react"
 import type { Track } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -16,6 +17,7 @@ interface DeckProps {
   onPause: () => void
   onSeek: (time: number) => void
   onGainChange: (gain: number) => void
+  onLoadTrack?: (track: Track | File, deck: "A" | "B") => Promise<void>
   gain?: number
 }
 
@@ -35,17 +37,102 @@ export function Deck({
   onPause,
   onSeek,
   onGainChange,
+  onLoadTrack,
   gain = 1,
 }: DeckProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+  const [isDragOver, setIsDragOver] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Generate deterministic waveform heights to avoid hydration mismatch
+  const waveformHeights = useMemo(() => {
+    return Array.from({ length: 60 }).map((_, i) => {
+      // Use a deterministic pseudo-random pattern based on index
+      const seed = i * 0.618033988749895 // Golden ratio for better distribution
+      const pseudoRandom = (Math.sin(seed * 1000) + 1) / 2 // Convert to 0-1 range
+      // Round to 2 decimal places to ensure consistent server/client rendering
+      const height = 20 + Math.sin(i * 0.5) * 15 + pseudoRandom * 10
+      return `${Math.round(height * 100) / 100}%`
+    })
+  }, [])
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only hide drag over state if we're actually leaving the deck container
+    if (e.currentTarget === e.target) {
+      setIsDragOver(false)
+    }
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragOver(false)
+
+    if (!onLoadTrack) return
+
+    setIsLoading(true)
+
+    try {
+      // Check if it's a track being dragged from the library
+      const trackData = e.dataTransfer.getData("application/x-track")
+      if (trackData) {
+        const track: Track = JSON.parse(trackData)
+        await onLoadTrack(track, deck)
+        return
+      }
+
+      // Check if it's a file being dragged from the file system
+      const files = Array.from(e.dataTransfer.files)
+      const audioFiles = files.filter((file) => {
+        const validTypes = [
+          "audio/mpeg",
+          "audio/wav",
+          "audio/ogg",
+          "audio/mp4",
+          "audio/x-m4a",
+          "audio/aac",
+          "audio/flac",
+        ]
+        return validTypes.includes(file.type) || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)
+      })
+
+      if (audioFiles.length > 0) {
+        const file = audioFiles[0]
+        // Validate file size (50MB limit)
+        if (file.size > 50 * 1024 * 1024) {
+          console.error(`File "${file.name}" is too large. Max size is 50MB.`)
+          return
+        }
+        // Load the first audio file
+        await onLoadTrack(file, deck)
+      }
+    } catch (error) {
+      console.error("Error loading track:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border",
+        "flex flex-col gap-3 p-4 rounded-xl backdrop-blur-xl border transition-all",
         "bg-slate-900/60 border-purple-500/30",
         deck === "A" ? "border-l-2 border-l-purple-500" : "border-r-2 border-r-cyan-500",
+        isDragOver && (deck === "A" ? "border-purple-500 bg-purple-500/20" : "border-cyan-500 bg-cyan-500/20"),
+        isLoading && "opacity-50 pointer-events-none",
       )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Deck Label */}
       <div className="flex items-center justify-between">
@@ -57,13 +144,20 @@ export function Deck({
 
       {/* Track Info */}
       <div className="min-h-[40px]">
-        {track ? (
+        {isDragOver ? (
+          <div className="space-y-0.5">
+            <p className={cn("text-sm font-medium truncate", deck === "A" ? "text-purple-400" : "text-cyan-400")}>
+              Drop track here...
+            </p>
+            <p className="text-xs text-slate-400">Release to load</p>
+          </div>
+        ) : track ? (
           <div className="space-y-0.5">
             <p className="text-sm font-medium text-white truncate">{track.title}</p>
             <p className="text-xs text-slate-400 truncate">{track.artist}</p>
           </div>
         ) : (
-          <p className="text-sm text-slate-500 italic">No track loaded</p>
+          <p className="text-sm text-slate-500 italic">No track loaded • Drag & drop or click library buttons</p>
         )}
       </div>
 
@@ -95,12 +189,12 @@ export function Deck({
 
         {/* Fake waveform visualization */}
         <div className="absolute inset-0 flex items-center justify-center gap-px opacity-50">
-          {Array.from({ length: 60 }).map((_, i) => (
+          {waveformHeights.map((height, i) => (
             <div
               key={i}
               className={cn("w-1 rounded-full", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
               style={{
-                height: `${20 + Math.sin(i * 0.5) * 15 + Math.random() * 10}%`,
+                height,
               }}
             />
           ))}

@@ -69,8 +69,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Both tracks are required" }, { status: 400 })
     }
 
+    if (!process.env.XAI_API_KEY) {
+      return NextResponse.json({ error: "XAI API key not configured" }, { status: 500 })
+    }
+
     const { object: plan } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: transitionPlanSchema,
       prompt: `Create a professional DJ transition plan between these two tracks:
 

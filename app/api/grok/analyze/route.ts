@@ -22,8 +22,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Track ID is required" }, { status: 400 })
     }
 
+    if (!process.env.XAI_API_KEY) {
+      return NextResponse.json({ error: "XAI API key not configured" }, { status: 500 })
+    }
+
     const { object: analysis } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: trackAnalysisSchema,
       prompt: `Analyze this music track based on its metadata and provide a detailed analysis:
 

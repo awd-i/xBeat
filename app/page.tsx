@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { Disc3, Mic } from "lucide-react"
 
 export default function DJSystem() {
-  const { tracks } = useTracks()
+  const { tracks, uploadTrack } = useTracks()
   const {
     isInitialized,
     initialize,
@@ -58,6 +58,27 @@ export default function DJSystem() {
       }
     },
     [isInitialized, initialize, loadTrack],
+  )
+
+  const handleLoadTrackOrFile = useCallback(
+    async (trackOrFile: Track | File, deck: "A" | "B") => {
+      let track: Track
+
+      // If it's a File, upload it first
+      if (trackOrFile instanceof File) {
+        // Validate file size
+        if (trackOrFile.size > 50 * 1024 * 1024) {
+          throw new Error(`File "${trackOrFile.name}" is too large. Max size is 50MB.`)
+        }
+        track = await uploadTrack(trackOrFile)
+      } else {
+        track = trackOrFile
+      }
+
+      // Load the track to the deck
+      await handleLoadToDeck(track, deck)
+    },
+    [uploadTrack, handleLoadToDeck],
   )
 
   const handleApplyTransition = useCallback(
@@ -227,6 +248,7 @@ export default function DJSystem() {
                     },
                   })
                 }
+                onLoadTrack={handleLoadTrackOrFile}
               />
             </div>
 
@@ -267,6 +289,7 @@ export default function DJSystem() {
                     },
                   })
                 }
+                onLoadTrack={handleLoadTrackOrFile}
               />
             </div>
           </div>

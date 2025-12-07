@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob"
 import { type NextRequest, NextResponse } from "next/server"
 import { addTrack } from "@/lib/music-store"
+import type { Track } from "@/lib/types"
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,11 +24,15 @@ export async function POST(request: NextRequest) {
     })
 
     // Register track in our system
-    const track = addTrack({
+    const track: Track = {
+      id: crypto.randomUUID(),
       title: file.name.replace(/\.[^/.]+$/, ""),
       artist: "Unknown Artist",
       url: blob.url,
-    })
+      createdAt: new Date(),
+      analyzed: false,
+    }
+    addTrack(track)
 
     return NextResponse.json({ track })
   } catch (error) {

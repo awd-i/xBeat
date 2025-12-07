@@ -123,7 +123,15 @@ export function MusicLibrary({ onLoadToDeck }: MusicLibraryProps) {
             </div>
           ) : (
             filteredTracks.map((track) => (
-              <div key={track.id} className="group p-2 rounded-lg hover:bg-slate-800/50 transition-colors">
+              <div
+                key={track.id}
+                className="group p-2 rounded-lg hover:bg-slate-800/50 transition-colors cursor-grab active:cursor-grabbing"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData("application/x-track", JSON.stringify(track))
+                  e.dataTransfer.effectAllowed = "move"
+                }}
+              >
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-white truncate">{track.title}</p>
