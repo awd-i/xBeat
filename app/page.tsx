@@ -296,96 +296,96 @@ export default function DJSystem() {
           {controlsExpanded && (
             <div className="bg-slate-950/90 backdrop-blur-xl border-t border-purple-500/20 p-4 max-h-[45vh] overflow-y-auto">
               <div className="max-w-7xl mx-auto">
-                {activePanel === "dj" ? (
-                  /* DJ Controls Panel */
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <Deck
-                        deck="A"
-                        track={trackA}
-                        isPlaying={isPlayingA}
-                        currentTime={currentTimeA}
-                        duration={durationA}
-                        onPlay={() => play("A")}
-                        onPause={() => pause("A")}
-                        onSeek={(time) => seek("A", time)}
-                        onGainChange={(gain) =>
-                          updateMusicObject({
-                            tracks: {
-                              ...musicObject.tracks,
-                              A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
-                            },
-                          })
-                        }
-                        onTempoChange={(playbackRate) =>
-                          updateMusicObject({
-                            tracks: {
-                              ...musicObject.tracks,
-                              A: musicObject.tracks.A ? { ...musicObject.tracks.A, playbackRate } : null,
-                            },
-                          })
-                        }
-                        gain={musicObject.tracks.A?.gain}
-                        playbackRate={musicObject.tracks.A?.playbackRate ?? 1}
-                      />
-                    </div>
-
-                    <div className="w-56">
-                      <Mixer
-                        musicObject={musicObject}
-                        onCrossfadeChange={setCrossfade}
-                        onEQChange={(band, value) =>
-                          updateMusicObject({
-                            eq: { ...musicObject.eq, [band]: value },
-                          })
-                        }
-                        onFilterChange={(cutoff) =>
-                          updateMusicObject({
-                            filter: { ...musicObject.filter, cutoff },
-                          })
-                        }
-                        onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
-                        onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
-                        onMasterGainChange={(value) => updateMusicObject({ masterGain: value })}
-                        onIsolationChange={handleIsolationChange}
-                        bpmA={bpmA}
-                        bpmB={bpmB}
-                      />
-                    </div>
-
-                    <div className="flex-1">
-                      <Deck
-                        deck="B"
-                        track={trackB}
-                        isPlaying={isPlayingB}
-                        currentTime={currentTimeB}
-                        duration={durationB}
-                        onPlay={() => play("B")}
-                        onPause={() => pause("B")}
-                        onSeek={(time) => seek("B", time)}
-                        onGainChange={(gain) =>
-                          updateMusicObject({
-                            tracks: {
-                              ...musicObject.tracks,
-                              B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
-                            },
-                          })
-                        }
-                        onTempoChange={(playbackRate) =>
-                          updateMusicObject({
-                            tracks: {
-                              ...musicObject.tracks,
-                              B: musicObject.tracks.B ? { ...musicObject.tracks.B, playbackRate } : null,
-                            },
-                          })
-                        }
-                        gain={musicObject.tracks.B?.gain}
-                        playbackRate={musicObject.tracks.B?.playbackRate ?? 1}
-                      />
-                    </div>
+                {/* DJ Controls Panel */}
+                <div className={`flex gap-3 ${activePanel === "dj" ? "" : "hidden"}`}>
+                  <div className="flex-1">
+                    <Deck
+                      deck="A"
+                      track={trackA}
+                      isPlaying={isPlayingA}
+                      currentTime={currentTimeA}
+                      duration={durationA}
+                      onPlay={() => play("A")}
+                      onPause={() => pause("A")}
+                      onSeek={(time) => seek("A", time)}
+                      onGainChange={(gain) =>
+                        updateMusicObject({
+                          tracks: {
+                            ...musicObject.tracks,
+                            A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
+                          },
+                        })
+                      }
+                      onTempoChange={(playbackRate) =>
+                        updateMusicObject({
+                          tracks: {
+                            ...musicObject.tracks,
+                            A: musicObject.tracks.A ? { ...musicObject.tracks.A, playbackRate } : null,
+                          },
+                        })
+                      }
+                      gain={musicObject.tracks.A?.gain}
+                      playbackRate={musicObject.tracks.A?.playbackRate ?? 1}
+                    />
                   </div>
-                ) : (
-                  /* Grok Chat Panel */
+
+                  <div className="w-56">
+                    <Mixer
+                      musicObject={musicObject}
+                      onCrossfadeChange={setCrossfade}
+                      onEQChange={(band, value) =>
+                        updateMusicObject({
+                          eq: { ...musicObject.eq, [band]: value },
+                        })
+                      }
+                      onFilterChange={(cutoff) =>
+                        updateMusicObject({
+                          filter: { ...musicObject.filter, cutoff },
+                        })
+                      }
+                      onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
+                      onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
+                      onMasterGainChange={(value) => updateMusicObject({ masterGain: value })}
+                      onIsolationChange={handleIsolationChange}
+                      bpmA={bpmA}
+                      bpmB={bpmB}
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <Deck
+                      deck="B"
+                      track={trackB}
+                      isPlaying={isPlayingB}
+                      currentTime={currentTimeB}
+                      duration={durationB}
+                      onPlay={() => play("B")}
+                      onPause={() => pause("B")}
+                      onSeek={(time) => seek("B", time)}
+                      onGainChange={(gain) =>
+                        updateMusicObject({
+                          tracks: {
+                            ...musicObject.tracks,
+                            B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
+                          },
+                        })
+                      }
+                      onTempoChange={(playbackRate) =>
+                        updateMusicObject({
+                          tracks: {
+                            ...musicObject.tracks,
+                            B: musicObject.tracks.B ? { ...musicObject.tracks.B, playbackRate } : null,
+                          },
+                        })
+                      }
+                      gain={musicObject.tracks.B?.gain}
+                      playbackRate={musicObject.tracks.B?.playbackRate ?? 1}
+                    />
+                  </div>
+                </div>
+
+                {/* Grok Chat Panel - Keep mounted to preserve chat history */}
+                <div className={activePanel === "grok" ? "" : "hidden"}>
                   <GrokChatPanel
                     trackA={trackA}
                     trackB={trackB}
@@ -400,7 +400,7 @@ export default function DJSystem() {
                     onLoadTrack={handleLoadToDeck}
                     onCancelTransition={cancelTransition}
                   />
-                )}
+                </div>
               </div>
             </div>
           )}
