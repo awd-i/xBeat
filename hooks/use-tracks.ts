@@ -1,15 +1,36 @@
 "use client"
 
-import useSWR from "swr"
+import { useState, useEffect, useCallback } from "react"
 import type { Track } from "@/lib/types"
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+import { logError } from "@/lib/logger"
 
 export function useTracks() {
-  const { data, error, isLoading, mutate } = useSWR<{ tracks: Track[] }>("/api/tracks", fetcher, {
-    refreshInterval: 0,
-    revalidateOnFocus: false,
-  })
+  const [data, setData] = useState<{ tracks: Track[] } | undefined>(undefined)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<Error | null>(null)
+
+  const fetchTracks = useCallback(async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
+      const response = await fetch("/api/tracks/simple")
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const result = await response.json()
+      setData(result)
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      setError(error)
+      logError('Failed to fetch tracks', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchTracks()
+  }, [fetchTracks])
 
   const uploadTrack = async (file: File) => {
     try {
@@ -27,26 +48,26 @@ export function useTracks() {
       }
 
       const result = await uploadResponse.json()
-      await mutate()
+      await fetchTracks() // Refresh tracks after upload
       return result.track as Track
     } catch (err) {
-      console.error("[v0] Upload error:", err)
+      logError('Track upload failed', err, { fileName: file.name })
       throw err
     }
   }
 
-  const deleteTrack = async (id: string, url: string) => {
-    const response = await fetch("/api/tracks", {
+  const deleteTrack = async (id: string) => {
+    const response = await fetch("/api/tracks/simple", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, url }),
+      body: JSON.stringify({ id }),
     })
 
     if (!response.ok) {
       throw new Error("Delete failed")
     }
 
-    await mutate()
+    await fetchTracks() // Refresh tracks after delete
   }
 
   const analyzeTrack = async (track: Track) => {
@@ -66,7 +87,7 @@ export function useTracks() {
     }
 
     const result = await response.json()
-    await mutate()
+    await fetchTracks() // Refresh tracks after analysis
     return result
   }
 
@@ -81,7 +102,7 @@ export function useTracks() {
       throw new Error("Update failed")
     }
 
-    await mutate()
+    await fetchTracks() // Refresh tracks after update
   }
 
   return {
@@ -92,6 +113,6 @@ export function useTracks() {
     deleteTrack,
     analyzeTrack,
     updateTrack,
-    refresh: mutate,
+    refresh: fetchTracks,
   }
 }

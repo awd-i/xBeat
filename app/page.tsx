@@ -4,18 +4,16 @@ import { useState, useCallback } from "react"
 import type { Track, MusicObject, TransitionPlan } from "@/lib/types"
 import { useMusicEngine } from "@/hooks/use-music-engine"
 import { useTracks } from "@/hooks/use-tracks"
-import { ThreeVisualizer } from "@/components/visualizer/three-visualizer"
-import { Deck } from "@/components/dj/deck"
-import { Mixer } from "@/components/dj/mixer"
-import { MusicLibrary } from "@/components/library/music-library"
-import { GrokCopilot } from "@/components/grok/grok-copilot"
-import { VoiceControl } from "@/components/grok/voice-control"
-import { VisualizerControls } from "@/components/dj/visualizer-controls"
-import { Button } from "@/components/ui/button"
-import { Disc3, Mic } from "lucide-react"
+import { ClientOnlyVisualizer } from "@/components/visualizer/client-only-visualizer"
+import { DJHeader } from "@/components/layout/dj-header"
+import { DJSidebar } from "@/components/layout/dj-sidebar"
+import { DeckArea } from "@/components/layout/deck-area"
+import { ClientWrapper } from "@/components/client-wrapper"
+import { logError } from "@/lib/logger"
 
 export default function DJSystem() {
   const { tracks } = useTracks()
+  const musicEngine = useMusicEngine()
   const {
     isInitialized,
     initialize,
@@ -35,7 +33,7 @@ export default function DJSystem() {
     musicObject,
     analyserData,
     getAnalyserData,
-  } = useMusicEngine()
+  } = musicEngine
 
   const [trackA, setTrackA] = useState<Track | null>(null)
   const [trackB, setTrackB] = useState<Track | null>(null)
@@ -45,16 +43,20 @@ export default function DJSystem() {
 
   const handleLoadToDeck = useCallback(
     async (track: Track, deck: "A" | "B") => {
-      if (!isInitialized) {
-        await initialize()
-      }
+      try {
+        if (!isInitialized) {
+          await initialize()
+        }
 
-      await loadTrack(deck, track.url)
+        await loadTrack(deck, track.url)
 
-      if (deck === "A") {
-        setTrackA(track)
-      } else {
-        setTrackB(track)
+        if (deck === "A") {
+          setTrackA(track)
+        } else {
+          setTrackB(track)
+        }
+      } catch (error) {
+        logError('Failed to load track to deck', error, { deck, trackId: track.id })
       }
     },
     [isInitialized, initialize, loadTrack],
@@ -80,198 +82,118 @@ export default function DJSystem() {
 
   const handleVoiceAction = useCallback(
     async (action: string, params?: Record<string, unknown>) => {
-      switch (action) {
-        case "play":
-          if (!isInitialized) await initialize()
-          if (params?.deck === "both") {
-            play()
-          } else {
-            play(params?.deck as "A" | "B" | undefined)
-          }
-          break
-        case "pause":
-          if (params?.deck === "both") {
-            pause()
-          } else {
-            pause(params?.deck as "A" | "B" | undefined)
-          }
-          break
-        case "transition":
-          if (params?.type === "smooth") {
-            const start = musicObject.crossfader
-            const end = start < 0.5 ? 1 : 0
-            let progress = 0
-            const interval = setInterval(() => {
-              progress += 0.02
-              if (progress >= 1) {
-                clearInterval(interval)
-                setCrossfade(end)
-              } else {
-                setCrossfade(start + (end - start) * progress)
-              }
-            }, 50)
-          }
-          break
-        case "analyze":
-          break
+      try {
+        switch (action) {
+          case "play":
+            if (!isInitialized) await initialize()
+            if (params?.deck === "both") {
+              await play()
+            } else {
+              await play(params?.deck as "A" | "B" | undefined)
+            }
+            break
+          case "pause":
+            if (params?.deck === "both") {
+              pause()
+            } else {
+              pause(params?.deck as "A" | "B" | undefined)
+            }
+            break
+          case "transition":
+            if (params?.type === "smooth") {
+              handleSmoothTransition()
+            }
+            break
+          case "analyze":
+            // Voice analysis action
+            break
+        }
+      } catch (error) {
+        logError('Voice action failed', error, { action, params })
       }
     },
     [isInitialized, initialize, play, pause, musicObject.crossfader, setCrossfade],
   )
+  
+  const handleSmoothTransition = useCallback(() => {
+    const start = musicObject.crossfader
+    const end = start < 0.5 ? 1 : 0
+    const duration = 2000 // 2 seconds
+    const startTime = performance.now()
+    
+    const animate = () => {
+      const elapsed = performance.now() - startTime
+      const progress = Math.min(elapsed / duration, 1)
+      
+      const value = start + (end - start) * progress
+      setCrossfade(value)
+      
+      if (progress < 1) {
+        requestAnimationFrame(animate)
+      }
+    }
+    
+    requestAnimationFrame(animate)
+  }, [musicObject.crossfader, setCrossfade])
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
-      <div className="absolute inset-0 z-0">
-        <ThreeVisualizer analyserData={analyserData} musicObject={musicObject} />
-      </div>
+    <ClientWrapper>
+      <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
+        <div className="absolute inset-0 z-0">
+          <ClientOnlyVisualizer analyserData={analyserData} musicObject={musicObject} />
+        </div>
 
-      <div className="relative z-10 flex flex-col h-full">
-        <header className="flex items-center justify-between px-4 py-2 bg-slate-950/80 backdrop-blur-sm border-b border-purple-500/20">
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Disc3 className="h-6 w-6 text-purple-400 animate-[spin_3s_linear_infinite]" />
-            </div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-              xBeat
-            </h1>
-          </div>
-
-          <VisualizerControls
+        <div className="relative z-10 flex flex-col h-full">
+          <DJHeader
             musicObject={musicObject}
-            onModeChange={(mode) => updateMusicObject({ visualizerMode: mode })}
-            onSensitivityChange={(value) => updateMusicObject({ visualSensitivity: value })}
-            onColorSchemeChange={(scheme) => updateMusicObject({ colorScheme: scheme })}
+            showLibrary={showLibrary}
+            showCopilot={showCopilot}
+            showVoiceControl={showVoiceControl}
+            onToggleLibrary={() => setShowLibrary(!showLibrary)}
+            onToggleCopilot={() => setShowCopilot(!showCopilot)}
+            onToggleVoiceControl={() => setShowVoiceControl(!showVoiceControl)}
+            onUpdateMusicObject={updateMusicObject}
           />
 
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowLibrary(!showLibrary)}
-              className={showLibrary ? "text-purple-400" : "text-slate-400"}
-            >
-              Library
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCopilot(!showCopilot)}
-              className={showCopilot ? "text-cyan-400" : "text-slate-400"}
-            >
-              Grok
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowVoiceControl(!showVoiceControl)}
-              className={showVoiceControl ? "text-green-400" : "text-slate-400"}
-            >
-              <Mic className="h-4 w-4 mr-1" />
-              Voice
-            </Button>
-          </div>
-        </header>
-
-        <div className="flex-1 flex overflow-hidden">
-          {showLibrary && (
-            <div className="w-72 p-3 overflow-hidden">
-              <MusicLibrary onLoadToDeck={handleLoadToDeck} />
-            </div>
-          )}
-
-          <div className="flex-1" />
-
-          {showVoiceControl ? (
-            <div className="w-80 p-3 overflow-hidden">
-              <VoiceControl
+          <div className="flex-1 flex overflow-hidden">
+            {(showLibrary || showCopilot || showVoiceControl) && (
+              <DJSidebar
+                showLibrary={showLibrary}
+                showCopilot={showCopilot}
+                showVoiceControl={showVoiceControl}
                 trackA={trackA}
                 trackB={trackB}
-                musicObject={musicObject}
-                getAnalyserData={getAnalyserData}
-                onApplySettings={handleApplyPreset}
-                onAction={handleVoiceAction}
-              />
-            </div>
-          ) : showCopilot ? (
-            <div className="w-80 p-3 overflow-hidden">
-              <GrokCopilot
-                trackA={trackA}
-                trackB={trackB}
-                musicObject={musicObject}
                 tracks={tracks}
+                musicObject={musicObject}
+                onLoadToDeck={handleLoadToDeck}
                 onApplyTransition={handleApplyTransition}
                 onApplyPreset={handleApplyPreset}
-                onLoadTrack={handleLoadToDeck}
+                onVoiceAction={handleVoiceAction}
+                getAnalyserData={getAnalyserData}
               />
-            </div>
-          ) : null}
-        </div>
+            )}
 
-        <div className="bg-slate-950/90 backdrop-blur-xl border-t border-purple-500/20 p-4">
-          <div className="max-w-6xl mx-auto flex gap-4">
-            <div className="flex-1">
-              <Deck
-                deck="A"
-                track={trackA}
-                isPlaying={isPlayingA}
-                currentTime={currentTimeA}
-                duration={durationA}
-                onPlay={() => play("A")}
-                onPause={() => pause("A")}
-                onSeek={(time) => seek("A", time)}
-                onGainChange={(gain) =>
-                  updateMusicObject({
-                    tracks: {
-                      ...musicObject.tracks,
-                      A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
-                    },
-                  })
-                }
-              />
-            </div>
-
-            <div className="w-64">
-              <Mixer
-                musicObject={musicObject}
-                onCrossfadeChange={setCrossfade}
-                onEQChange={(band, value) =>
-                  updateMusicObject({
-                    eq: { ...musicObject.eq, [band]: value },
-                  })
-                }
-                onFilterChange={(cutoff) =>
-                  updateMusicObject({
-                    filter: { ...musicObject.filter, cutoff },
-                  })
-                }
-                onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
-                onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
-              />
-            </div>
-
-            <div className="flex-1">
-              <Deck
-                deck="B"
-                track={trackB}
-                isPlaying={isPlayingB}
-                currentTime={currentTimeB}
-                duration={durationB}
-                onPlay={() => play("B")}
-                onPause={() => pause("B")}
-                onSeek={(time) => seek("B", time)}
-                onGainChange={(gain) =>
-                  updateMusicObject({
-                    tracks: {
-                      ...musicObject.tracks,
-                      B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
-                    },
-                  })
-                }
-              />
-            </div>
+            <div className="flex-1" />
           </div>
+
+          <DeckArea
+            trackA={trackA}
+            trackB={trackB}
+            musicObject={musicObject}
+            isPlayingA={isPlayingA}
+            isPlayingB={isPlayingB}
+            currentTimeA={currentTimeA}
+            currentTimeB={currentTimeB}
+            durationA={durationA}
+            durationB={durationB}
+            onPlay={play}
+            onPause={pause}
+            onSeek={seek}
+            onCrossfadeChange={setCrossfade}
+            onUpdateMusicObject={updateMusicObject}
+          />
         </div>
       </div>
-    </div>
+    </ClientWrapper>
   )
 }

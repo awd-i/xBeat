@@ -3,19 +3,30 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { getMusicEngine, type MusicEngine } from "@/lib/music-engine"
 import { type MusicObject, type TransitionPlan, defaultMusicObject } from "@/lib/types"
+import { logError } from "@/lib/logger"
+
+interface EngineState {
+  isPlayingA: boolean
+  isPlayingB: boolean
+  currentTimeA: number
+  currentTimeB: number
+  analyserData: { frequency: Uint8Array; timeDomain: Uint8Array }
+}
 
 export function useMusicEngine() {
   const [isInitialized, setIsInitialized] = useState(false)
-  const [isPlayingA, setIsPlayingA] = useState(false)
-  const [isPlayingB, setIsPlayingB] = useState(false)
-  const [currentTimeA, setCurrentTimeA] = useState(0)
-  const [currentTimeB, setCurrentTimeB] = useState(0)
   const [durationA, setDurationA] = useState(0)
   const [durationB, setDurationB] = useState(0)
   const [musicObject, setMusicObject] = useState<MusicObject>(defaultMusicObject)
-  const [analyserData, setAnalyserData] = useState<{ frequency: Uint8Array; timeDomain: Uint8Array }>({
-    frequency: new Uint8Array(1024),
-    timeDomain: new Uint8Array(1024),
+  const [engineState, setEngineState] = useState<EngineState>({
+    isPlayingA: false,
+    isPlayingB: false,
+    currentTimeA: 0,
+    currentTimeB: 0,
+    analyserData: {
+      frequency: new Uint8Array(1024),
+      timeDomain: new Uint8Array(1024),
+    },
   })
 
   const engineRef = useRef<MusicEngine | null>(null)
@@ -23,6 +34,10 @@ export function useMusicEngine() {
 
   useEffect(() => {
     engineRef.current = getMusicEngine()
+    // Initialize with the engine's music object
+    if (engineRef.current) {
+      setMusicObject(engineRef.current.getMusicObject())
+    }
 
     return () => {
       if (animationRef.current) {
@@ -37,14 +52,17 @@ export function useMusicEngine() {
     await engineRef.current.initialize()
     setIsInitialized(true)
 
-    // Start animation loop for analyser data
+    // Start animation loop for real-time updates
     const updateLoop = () => {
       if (engineRef.current) {
-        setAnalyserData(engineRef.current.getAnalyserData())
-        setCurrentTimeA(engineRef.current.getCurrentTime("A"))
-        setCurrentTimeB(engineRef.current.getCurrentTime("B"))
-        setIsPlayingA(engineRef.current.isPlaying("A"))
-        setIsPlayingB(engineRef.current.isPlaying("B"))
+        // Batch all state updates together
+        setEngineState({
+          isPlayingA: engineRef.current.isPlaying("A"),
+          isPlayingB: engineRef.current.isPlaying("B"),
+          currentTimeA: engineRef.current.getCurrentTime("A"),
+          currentTimeB: engineRef.current.getCurrentTime("B"),
+          analyserData: engineRef.current.getAnalyserData(),
+        })
       }
       animationRef.current = requestAnimationFrame(updateLoop)
     }
@@ -70,31 +88,43 @@ export function useMusicEngine() {
     [isInitialized, initialize],
   )
 
-  const play = useCallback((deck?: "A" | "B") => {
+  const play = useCallback(async (deck?: "A" | "B") => {
     if (!engineRef.current) return
-    engineRef.current.play(deck)
+    try {
+      await engineRef.current.play(deck)
+    } catch (error) {
+      logError('Failed to play deck', error, { deck })
+    }
   }, [])
 
   const pause = useCallback((deck?: "A" | "B") => {
     if (!engineRef.current) return
-    engineRef.current.pause(deck)
+    try {
+      engineRef.current.pause(deck)
+    } catch (error) {
+      logError('Failed to pause deck', error, { deck })
+    }
   }, [])
 
-  const seek = useCallback((deck: "A" | "B", time: number) => {
+  const seek = useCallback(async (deck: "A" | "B", time: number) => {
     if (!engineRef.current) return
-    engineRef.current.seek(deck, time)
+    try {
+      await engineRef.current.seek(deck, time)
+    } catch (error) {
+      logError('Failed to seek deck', error, { deck, time })
+    }
   }, [])
 
   const setCrossfade = useCallback((value: number) => {
     if (!engineRef.current) return
     engineRef.current.setCrossfade(value)
-    setMusicObject((prev) => ({ ...prev, crossfader: value }))
+    setMusicObject(engineRef.current.getMusicObject())
   }, [])
 
   const updateMusicObject = useCallback((updates: Partial<MusicObject>) => {
     if (!engineRef.current) return
     engineRef.current.updateMusicObject(updates)
-    setMusicObject((prev) => ({ ...prev, ...updates }))
+    setMusicObject(engineRef.current.getMusicObject())
   }, [])
 
   const applyTransitionPlan = useCallback((plan: TransitionPlan) => {
@@ -128,14 +158,14 @@ export function useMusicEngine() {
     updateMusicObject,
     applyTransitionPlan,
     hasTrack,
-    isPlayingA,
-    isPlayingB,
-    currentTimeA,
-    currentTimeB,
+    isPlayingA: engineState.isPlayingA,
+    isPlayingB: engineState.isPlayingB,
+    currentTimeA: engineState.currentTimeA,
+    currentTimeB: engineState.currentTimeB,
     durationA,
     durationB,
     musicObject,
-    analyserData,
-    getAnalyserData, // Expose getAnalyserData
+    analyserData: engineState.analyserData,
+    getAnalyserData,
   }
 }

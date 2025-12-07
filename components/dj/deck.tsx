@@ -93,17 +93,22 @@ export function Deck({
           style={{ left: `${progress}%` }}
         />
 
-        {/* Fake waveform visualization */}
+        {/* Static waveform visualization */}
         <div className="absolute inset-0 flex items-center justify-center gap-px opacity-50">
-          {Array.from({ length: 60 }).map((_, i) => (
-            <div
-              key={i}
-              className={cn("w-1 rounded-full", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
-              style={{
-                height: `${20 + Math.sin(i * 0.5) * 15 + Math.random() * 10}%`,
-              }}
-            />
-          ))}
+          {Array.from({ length: 60 }).map((_, i) => {
+            // Use deterministic values to avoid hydration mismatch
+            const baseHeight = 20 + Math.sin(i * 0.5) * 15
+            const variation = Math.sin(i * 1.3) * 8 // Deterministic variation
+            return (
+              <div
+                key={`waveform-${deck}-${i}`}
+                className={cn("w-1 rounded-full", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
+                style={{
+                  height: `${Math.max(5, baseHeight + variation)}%`,
+                }}
+              />
+            )
+          })}
         </div>
 
         {/* Time display */}

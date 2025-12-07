@@ -1,42 +1,38 @@
-// Web Audio API based music engine
+// Web Audio API based music engine - Refactored
 import type { MusicObject, TransitionPlan } from "./types"
+import { defaultMusicObject } from "./types"
+
+interface DeckState {
+  buffer: AudioBuffer | null
+  gain: GainNode | null
+  panNode: StereoPannerNode | null
+  eqLow: BiquadFilterNode | null
+  eqMid: BiquadFilterNode | null
+  eqHigh: BiquadFilterNode | null
+  isPlaying: boolean
+  startTime: number
+  pauseOffset: number
+  currentSource: AudioBufferSourceNode | null
+}
 
 export class MusicEngine {
   private audioContext: AudioContext | null = null
-  private deckA: {
-    source: AudioBufferSourceNode | null
-    buffer: AudioBuffer | null
-    gain: GainNode | null
-    panNode: StereoPannerNode | null
-    eqLow: BiquadFilterNode | null
-    eqMid: BiquadFilterNode | null
-    eqHigh: BiquadFilterNode | null
-    isPlaying: boolean
-    startTime: number
-    pauseTime: number
-  } = {
-    source: null,
-    buffer: null,
-    gain: null,
-    panNode: null,
-    eqLow: null,
-    eqMid: null,
-    eqHigh: null,
-    isPlaying: false,
-    startTime: 0,
-    pauseTime: 0,
-  }
-  private deckB: typeof this.deckA = {
-    source: null,
-    buffer: null,
-    gain: null,
-    panNode: null,
-    eqLow: null,
-    eqMid: null,
-    eqHigh: null,
-    isPlaying: false,
-    startTime: 0,
-    pauseTime: 0,
+  private deckA: DeckState = this.createDeckState()
+  private deckB: DeckState = this.createDeckState()
+  
+  private createDeckState(): DeckState {
+    return {
+      buffer: null,
+      gain: null,
+      panNode: null,
+      eqLow: null,
+      eqMid: null,
+      eqHigh: null,
+      isPlaying: false,
+      startTime: 0,
+      pauseOffset: 0,
+      currentSource: null,
+    }
   }
 
   private masterGain: GainNode | null = null
@@ -48,13 +44,18 @@ export class MusicEngine {
   private reverbGain: GainNode | null = null
   private dryGain: GainNode | null = null
 
-  private musicObject: MusicObject | null = null
+  private musicObject: MusicObject = { ...defaultMusicObject }
   private transitionInterval: NodeJS.Timeout | null = null
 
   async initialize(): Promise<void> {
     if (this.audioContext) return
 
     this.audioContext = new AudioContext()
+    
+    // Resume audio context if suspended (mobile/autoplay policy)
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume()
+    }
 
     // Create master chain
     this.masterGain = this.audioContext.createGain()
@@ -174,33 +175,78 @@ export class MusicEngine {
     deckObj.pauseTime = 0
   }
 
-  play(deck?: "A" | "B"): void {
+  async play(deck?: "A" | "B"): Promise<void> {
     if (!this.audioContext) return
+    
+    // Ensure audio context is running
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume()
+    }
 
     const decks = deck ? [deck] : (["A", "B"] as const)
 
     for (const d of decks) {
-      const deckObj = d === "A" ? this.deckA : this.deckB
-      if (!deckObj.buffer || !deckObj.eqLow || deckObj.isPlaying) continue
+      await this.playDeck(d)
+    }
+  }
+  
+  private async playDeck(deck: "A" | "B"): Promise<void> {
+    if (!this.audioContext) return
+    
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    if (!deckObj.buffer || !deckObj.eqLow) return
+    
+    // IMPORTANT: Stop any existing playback first
+    if (deckObj.isPlaying || deckObj.currentSource) {
+      this.stopDeck(deck)
+    }
+    
+    // Ensure musicObject is properly initialized
+    if (!this.musicObject || !this.musicObject.tracks) {
+      this.musicObject = { ...defaultMusicObject }
+    }
 
-      deckObj.source = this.audioContext.createBufferSource()
-      deckObj.source.buffer = deckObj.buffer
-      deckObj.source.connect(deckObj.eqLow)
+    // Create new source (AudioBufferSourceNode can only be used once)
+    deckObj.currentSource = this.audioContext.createBufferSource()
+    deckObj.currentSource.buffer = deckObj.buffer
+    deckObj.currentSource.connect(deckObj.eqLow)
 
-      // Apply playback rate if set
-      if (this.musicObject?.tracks[d]?.playbackRate) {
-        deckObj.source.playbackRate.value = this.musicObject.tracks[d]!.playbackRate
-      }
+    // Apply playback rate if set
+    const trackSettings = this.musicObject.tracks[deck]
+    if (trackSettings?.playbackRate) {
+      deckObj.currentSource.playbackRate.value = trackSettings.playbackRate
+    }
 
-      deckObj.source.start(0, deckObj.pauseTime)
-      deckObj.startTime = this.audioContext.currentTime - deckObj.pauseTime
-      deckObj.isPlaying = true
+    // Start from current offset
+    deckObj.currentSource.start(0, deckObj.pauseOffset)
+    deckObj.startTime = this.audioContext.currentTime
+    deckObj.isPlaying = true
 
-      deckObj.source.onended = () => {
+    // Handle track end
+    deckObj.currentSource.onended = () => {
+      if (deckObj.isPlaying) {
         deckObj.isPlaying = false
-        deckObj.pauseTime = 0
+        deckObj.pauseOffset = 0
+        deckObj.currentSource = null
       }
     }
+  }
+  
+  private stopDeck(deck: "A" | "B"): void {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    
+    if (deckObj.currentSource) {
+      try {
+        deckObj.currentSource.disconnect()
+        deckObj.currentSource.stop()
+        deckObj.currentSource.onended = null // Remove event listener
+      } catch (e) {
+        // Source may already be stopped
+      }
+      deckObj.currentSource = null
+    }
+    
+    deckObj.isPlaying = false
   }
 
   pause(deck?: "A" | "B"): void {
@@ -209,13 +255,25 @@ export class MusicEngine {
     const decks = deck ? [deck] : (["A", "B"] as const)
 
     for (const d of decks) {
-      const deckObj = d === "A" ? this.deckA : this.deckB
-      if (!deckObj.source || !deckObj.isPlaying) continue
-
-      deckObj.pauseTime = this.audioContext.currentTime - deckObj.startTime
-      deckObj.source.stop()
-      deckObj.isPlaying = false
+      this.pauseDeck(d)
     }
+  }
+  
+  private pauseDeck(deck: "A" | "B"): void {
+    if (!this.audioContext) return
+    
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    if (!deckObj.currentSource || !deckObj.isPlaying) return
+
+    // Calculate current position
+    const elapsed = this.audioContext.currentTime - deckObj.startTime
+    deckObj.pauseOffset = Math.min(
+      deckObj.pauseOffset + elapsed,
+      deckObj.buffer?.duration || 0
+    )
+    
+    // Use the centralized stop method
+    this.stopDeck(deck)
   }
 
   setCrossfade(value: number): void {
@@ -232,7 +290,7 @@ export class MusicEngine {
   updateMusicObject(obj: Partial<MusicObject>): void {
     if (!this.audioContext) return
 
-    this.musicObject = { ...this.musicObject, ...obj } as MusicObject
+    this.musicObject = { ...this.musicObject, ...obj }
 
     // Master gain
     if (obj.masterGain !== undefined && this.masterGain) {
@@ -244,14 +302,9 @@ export class MusicEngine {
       this.setCrossfade(obj.crossfader)
     }
 
-    // EQ (master)
+    // Master EQ (affects both decks)
     if (obj.eq) {
-      // Apply to both decks
-      for (const deck of [this.deckA, this.deckB]) {
-        if (deck.eqLow) deck.eqLow.gain.value = obj.eq.low
-        if (deck.eqMid) deck.eqMid.gain.value = obj.eq.mid
-        if (deck.eqHigh) deck.eqHigh.gain.value = obj.eq.high
-      }
+      this.updateMasterEQ(obj.eq)
     }
 
     // Filter
@@ -283,29 +336,51 @@ export class MusicEngine {
 
         if (settings) {
           if (settings.gain !== undefined && deck.gain) {
-            // This is individual deck gain, crossfade handles mix
+            deck.gain.gain.value = settings.gain
           }
           if (settings.pan !== undefined && deck.panNode) {
             deck.panNode.pan.value = settings.pan
           }
-          if (settings.playbackRate !== undefined && deck.source) {
-            deck.source.playbackRate.value = settings.playbackRate
+          if (settings.playbackRate !== undefined && deck.currentSource) {
+            deck.currentSource.playbackRate.value = settings.playbackRate
           }
         }
       }
     }
   }
+  
+  private updateMasterEQ(eq: { low: number; mid: number; high: number }): void {
+    // Apply master EQ to both decks
+    for (const deck of [this.deckA, this.deckB]) {
+      if (deck.eqLow) deck.eqLow.gain.value = eq.low
+      if (deck.eqMid) deck.eqMid.gain.value = eq.mid
+      if (deck.eqHigh) deck.eqHigh.gain.value = eq.high
+    }
+  }
+  
+  updateDeckEQ(deck: "A" | "B", eq: { low?: number; mid?: number; high?: number }): void {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    
+    if (eq.low !== undefined && deckObj.eqLow) {
+      deckObj.eqLow.gain.value = eq.low
+    }
+    if (eq.mid !== undefined && deckObj.eqMid) {
+      deckObj.eqMid.gain.value = eq.mid
+    }
+    if (eq.high !== undefined && deckObj.eqHigh) {
+      deckObj.eqHigh.gain.value = eq.high
+    }
+  }
 
   applyTransitionPlan(plan: TransitionPlan): void {
-    if (this.transitionInterval) {
-      clearInterval(this.transitionInterval)
-    }
+    // Clear any existing transition
+    this.stopTransition()
 
-    const startTime = Date.now()
+    const startTime = performance.now()
     const duration = plan.durationSeconds * 1000
 
-    this.transitionInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime
+    const animate = () => {
+      const elapsed = performance.now() - startTime
       const progress = Math.min(elapsed / duration, 1)
 
       // Interpolate crossfade
@@ -337,11 +412,25 @@ export class MusicEngine {
         if (this.delayFeedback) this.delayFeedback.gain.value = delay * 0.6
       }
 
-      if (progress >= 1) {
-        clearInterval(this.transitionInterval!)
+      if (progress < 1) {
+        this.transitionInterval = requestAnimationFrame(animate) as unknown as NodeJS.Timeout
+      } else {
         this.transitionInterval = null
       }
-    }, 50) // 20fps update rate
+    }
+    
+    this.transitionInterval = requestAnimationFrame(animate) as unknown as NodeJS.Timeout
+  }
+  
+  private stopTransition(): void {
+    if (this.transitionInterval) {
+      if (typeof this.transitionInterval === 'number') {
+        cancelAnimationFrame(this.transitionInterval)
+      } else {
+        clearInterval(this.transitionInterval)
+      }
+      this.transitionInterval = null
+    }
   }
 
   private interpolateAutomation(points: { t: number; value: number }[], progress: number): number {
@@ -389,10 +478,15 @@ export class MusicEngine {
 
     const deckObj = deck === "A" ? this.deckA : this.deckB
 
-    if (deckObj.isPlaying) {
-      return this.audioContext.currentTime - deckObj.startTime
+    if (deckObj.isPlaying && deckObj.currentSource) {
+      const elapsed = this.audioContext.currentTime - deckObj.startTime
+      return Math.min(
+        deckObj.pauseOffset + elapsed,
+        deckObj.buffer?.duration || 0
+      )
     }
-    return deckObj.pauseTime
+    
+    return deckObj.pauseOffset
   }
 
   getDuration(deck: "A" | "B"): number {
@@ -409,33 +503,56 @@ export class MusicEngine {
     const deckObj = deck === "A" ? this.deckA : this.deckB
     return deckObj.buffer !== null
   }
+  
+  getMusicObject(): MusicObject {
+    if (!this.musicObject || !this.musicObject.tracks) {
+      this.musicObject = { ...defaultMusicObject }
+    }
+    return this.musicObject
+  }
 
-  seek(deck: "A" | "B", time: number): void {
+  async seek(deck: "A" | "B", time: number): Promise<void> {
     const deckObj = deck === "A" ? this.deckA : this.deckB
     const wasPlaying = deckObj.isPlaying
 
+    // Pause first to stop current playback
     if (wasPlaying) {
-      this.pause(deck)
+      this.pauseDeck(deck)
     }
 
-    deckObj.pauseTime = Math.max(0, Math.min(time, deckObj.buffer?.duration || 0))
+    // Set new position
+    deckObj.pauseOffset = Math.max(0, Math.min(time, deckObj.buffer?.duration || 0))
 
+    // Resume playback if it was playing
     if (wasPlaying) {
-      this.play(deck)
+      await this.playDeck(deck)
     }
   }
 
   dispose(): void {
-    if (this.transitionInterval) {
-      clearInterval(this.transitionInterval)
-    }
-
+    this.stopTransition()
     this.pause()
+    
+    // Clean up sources
+    if (this.deckA.currentSource) {
+      try {
+        this.deckA.currentSource.disconnect()
+      } catch (e) {}
+    }
+    if (this.deckB.currentSource) {
+      try {
+        this.deckB.currentSource.disconnect()
+      } catch (e) {}
+    }
 
     if (this.audioContext) {
       this.audioContext.close()
       this.audioContext = null
     }
+    
+    // Reset deck states
+    this.deckA = this.createDeckState()
+    this.deckB = this.createDeckState()
   }
 }
 
