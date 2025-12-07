@@ -26,6 +26,7 @@ export default function DJSystem() {
     setCrossfade,
     updateMusicObject,
     applyTransitionPlan,
+    cancelTransition,
     isPlayingA,
     isPlayingB,
     currentTimeA,
@@ -35,6 +36,7 @@ export default function DJSystem() {
     musicObject,
     analyserData,
     getAnalyserData,
+    transitionState,
     musicEngine,
   } = useMusicEngine()
 
@@ -261,9 +263,11 @@ export default function DJSystem() {
                 trackB={trackB}
                 musicObject={musicObject}
                 tracks={tracks}
+                transitionState={transitionState}
                 onApplyTransition={handleApplyTransition}
                 onApplyPreset={handleApplyPreset}
                 onLoadTrack={handleLoadToDeck}
+                onCancelTransition={cancelTransition}
               />
             </div>
           ) : null}

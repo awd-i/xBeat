@@ -2,6 +2,21 @@
 import type { MusicObject, TransitionPlan } from "./types"
 import { BPMDetector } from "./bpm-detector"
 
+export interface TransitionState {
+  isActive: boolean
+  progress: number
+  startTime: number
+  duration: number
+  currentValues: {
+    crossfader: number
+    filterCutoff: number
+    reverb: number
+    delay: number
+  }
+}
+
+export type TransitionCallback = (state: TransitionState) => void
+
 export class MusicEngine {
   private audioContext: AudioContext | null = null
   private activeSources: { A: AudioBufferSourceNode | null; B: AudioBufferSourceNode | null } = { A: null, B: null }
@@ -72,6 +87,19 @@ export class MusicEngine {
   private musicObject: MusicObject | null = null
   private transitionInterval: NodeJS.Timeout | null = null
   private playLock = { A: false, B: false }
+  private transitionState: TransitionState = {
+    isActive: false,
+    progress: 0,
+    startTime: 0,
+    duration: 0,
+    currentValues: {
+      crossfader: 0.5,
+      filterCutoff: 20000,
+      reverb: 0,
+      delay: 0,
+    },
+  }
+  private transitionCallbacks: Set<TransitionCallback> = new Set()
 
   async initialize(): Promise<void> {
     if (this.audioContext) return
@@ -444,6 +472,40 @@ export class MusicEngine {
     }
   }
 
+  // Subscribe to transition state updates
+  onTransitionUpdate(callback: TransitionCallback): () => void {
+    this.transitionCallbacks.add(callback)
+    // Immediately call with current state
+    callback(this.transitionState)
+    return () => {
+      this.transitionCallbacks.delete(callback)
+    }
+  }
+
+  // Get current transition state
+  getTransitionState(): TransitionState {
+    return { ...this.transitionState }
+  }
+
+  // Cancel active transition
+  cancelTransition(): void {
+    if (this.transitionInterval) {
+      clearInterval(this.transitionInterval)
+      this.transitionInterval = null
+    }
+    this.transitionState = {
+      ...this.transitionState,
+      isActive: false,
+      progress: 0,
+    }
+    this.notifyTransitionCallbacks()
+  }
+
+  private notifyTransitionCallbacks(): void {
+    const state = { ...this.transitionState }
+    this.transitionCallbacks.forEach((cb) => cb(state))
+  }
+
   applyTransitionPlan(plan: TransitionPlan): void {
     console.log("[v0] MusicEngine: Starting transition plan execution", {
       duration: plan.durationSeconds,
@@ -460,6 +522,27 @@ export class MusicEngine {
     const startTime = Date.now()
     const duration = plan.durationSeconds * 1000
 
+    // Initialize transition state
+    this.transitionState = {
+      isActive: true,
+      progress: 0,
+      startTime,
+      duration: plan.durationSeconds,
+      currentValues: {
+        crossfader: this.interpolateAutomation(plan.crossfadeAutomation, 0),
+        filterCutoff: plan.filterAutomation?.length
+          ? this.interpolateAutomation(plan.filterAutomation.map((p) => ({ t: p.t, value: p.cutoff })), 0)
+          : 20000,
+        reverb: plan.fxAutomation?.length
+          ? this.interpolateAutomation(plan.fxAutomation.map((p) => ({ t: p.t, value: p.reverb })), 0)
+          : 0,
+        delay: plan.fxAutomation?.length
+          ? this.interpolateAutomation(plan.fxAutomation.map((p) => ({ t: p.t, value: p.delay })), 0)
+          : 0,
+      },
+    }
+    this.notifyTransitionCallbacks()
+
     this.transitionInterval = setInterval(() => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(elapsed / duration, 1)
@@ -469,30 +552,48 @@ export class MusicEngine {
       this.setCrossfade(crossfadeValue)
 
       // Interpolate filter if present
+      let filterCutoff = 20000
       if (plan.filterAutomation?.length) {
-        const cutoff = this.interpolateAutomation(
+        filterCutoff = this.interpolateAutomation(
           plan.filterAutomation.map((p) => ({ t: p.t, value: p.cutoff })),
           progress,
         )
         if (this.filter) {
-          this.filter.frequency.value = cutoff
+          this.filter.frequency.value = filterCutoff
         }
       }
 
       // Interpolate FX if present
+      let reverbValue = 0
+      let delayValue = 0
       if (plan.fxAutomation?.length) {
-        const reverb = this.interpolateAutomation(
+        reverbValue = this.interpolateAutomation(
           plan.fxAutomation.map((p) => ({ t: p.t, value: p.reverb })),
           progress,
         )
-        const delay = this.interpolateAutomation(
+        delayValue = this.interpolateAutomation(
           plan.fxAutomation.map((p) => ({ t: p.t, value: p.delay })),
           progress,
         )
-        if (this.reverbGain) this.reverbGain.gain.value = reverb
-        if (this.delayFeedback) this.delayFeedback.gain.value = delay * 0.6
-        if (this.delayWet) this.delayWet.gain.value = delay // Update delay wet gain
+        if (this.reverbGain) this.reverbGain.gain.value = reverbValue
+        if (this.delayFeedback) this.delayFeedback.gain.value = delayValue * 0.6
+        if (this.delayWet) this.delayWet.gain.value = delayValue
       }
+
+      // Update transition state
+      this.transitionState = {
+        isActive: progress < 1,
+        progress,
+        startTime,
+        duration: plan.durationSeconds,
+        currentValues: {
+          crossfader: crossfadeValue,
+          filterCutoff,
+          reverb: reverbValue,
+          delay: delayValue,
+        },
+      }
+      this.notifyTransitionCallbacks()
 
       if (progress >= 1) {
         console.log("[v0] MusicEngine: Transition completed")
