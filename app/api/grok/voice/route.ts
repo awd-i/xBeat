@@ -120,6 +120,13 @@ ${mixerContext}
 
     const messages = [...(conversationHistory || []).slice(-10), { role: "user" as const, content: command }]
 
+    if (!process.env.XAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "XAI API key not configured" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
     const result = streamText({
       model: xai("grok-3-fast"),
       system: systemPrompt,

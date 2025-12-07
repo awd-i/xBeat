@@ -1,6 +1,7 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client"
 import { NextResponse } from "next/server"
 import { addTrack } from "@/lib/music-store"
+import type { Track } from "@/lib/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 60

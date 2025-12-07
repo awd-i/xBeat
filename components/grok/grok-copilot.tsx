@@ -44,6 +44,7 @@ export function GrokCopilot({
   const [presets, setPresets] = useState<Preset[]>([])
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([])
   const [lastTransitionPlan, setLastTransitionPlan] = useState<TransitionPlan | null>(null)
+  const [isApplyingTransition, setIsApplyingTransition] = useState(false)
 
   const addCoachMessage = (message: string, type: "info" | "tip" | "action" = "info") => {
     setCoachMessages((prev) =>

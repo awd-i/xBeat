@@ -275,6 +275,31 @@ export class MusicEngine {
     deckObj.isPlaying = false
   }
 
+  private stopSource(deck: "A" | "B"): void {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+
+    // Increment source ID to invalidate any existing sources
+    this.sourceIds[deck]++
+
+    // Clean up the current source
+    if (deckObj.source) {
+      try {
+        deckObj.source.onended = null
+        deckObj.source.stop()
+      } catch (e) {
+        // Source may already be stopped
+      }
+      try {
+        deckObj.source.disconnect()
+      } catch (e) {
+        // Source may already be disconnected
+      }
+      deckObj.source = null
+    }
+
+    deckObj.isPlaying = false
+  }
+
   play(deck?: "A" | "B"): void {
     if (!this.audioContext) return
 
@@ -343,6 +368,7 @@ export class MusicEngine {
 
       if (!deckObj.isPlaying || !activeSource) continue
 
+      // Save the pause time first (calculate before stopping)
       deckObj.pauseTime = this.audioContext.currentTime - deckObj.startTime
 
       try {
@@ -444,6 +470,36 @@ export class MusicEngine {
     }
   }
 
+  private interpolateEQAutomation(
+    points: { t: number; low: number; mid: number; high: number }[],
+    progress: number,
+  ): { low: number; mid: number; high: number } {
+    if (points.length === 0) return { low: 0, mid: 0, high: 0 }
+    if (points.length === 1) return points[0]
+
+    // Find surrounding points
+    let before = points[0]
+    let after = points[points.length - 1]
+
+    for (let i = 0; i < points.length - 1; i++) {
+      if (points[i].t <= progress && points[i + 1].t >= progress) {
+        before = points[i]
+        after = points[i + 1]
+        break
+      }
+    }
+
+    if (before.t === after.t) return before
+
+    // Linear interpolation for each EQ band
+    const ratio = (progress - before.t) / (after.t - before.t)
+    return {
+      low: before.low + (after.low - before.low) * ratio,
+      mid: before.mid + (after.mid - before.mid) * ratio,
+      high: before.high + (after.high - before.high) * ratio,
+    }
+  }
+
   applyTransitionPlan(plan: TransitionPlan): void {
     console.log("[v0] MusicEngine: Starting transition plan execution", {
       duration: plan.durationSeconds,
@@ -455,10 +511,13 @@ export class MusicEngine {
     if (this.transitionInterval) {
       console.log("[v0] MusicEngine: Clearing existing transition")
       clearInterval(this.transitionInterval)
+      this.transitionInterval = null
     }
 
     const startTime = Date.now()
     const duration = plan.durationSeconds * 1000
+
+    console.log(`[TRANSITION] Starting transition plan: ${plan.durationSeconds}s`)
 
     this.transitionInterval = setInterval(() => {
       const elapsed = Date.now() - startTime
@@ -467,6 +526,22 @@ export class MusicEngine {
       // Interpolate crossfade
       const crossfadeValue = this.interpolateAutomation(plan.crossfadeAutomation, progress)
       this.setCrossfade(crossfadeValue)
+
+      // Interpolate Deck A EQ if present
+      if (plan.deckAEqAutomation?.length && this.deckA.eqLow && this.deckA.eqMid && this.deckA.eqHigh) {
+        const eq = this.interpolateEQAutomation(plan.deckAEqAutomation, progress)
+        this.deckA.eqLow.gain.value = eq.low
+        this.deckA.eqMid.gain.value = eq.mid
+        this.deckA.eqHigh.gain.value = eq.high
+      }
+
+      // Interpolate Deck B EQ if present
+      if (plan.deckBEqAutomation?.length && this.deckB.eqLow && this.deckB.eqMid && this.deckB.eqHigh) {
+        const eq = this.interpolateEQAutomation(plan.deckBEqAutomation, progress)
+        this.deckB.eqLow.gain.value = eq.low
+        this.deckB.eqMid.gain.value = eq.mid
+        this.deckB.eqHigh.gain.value = eq.high
+      }
 
       // Interpolate filter if present
       if (plan.filterAutomation?.length) {
@@ -572,12 +647,13 @@ export class MusicEngine {
     const deckObj = deck === "A" ? this.deckA : this.deckB
     const wasPlaying = deckObj.isPlaying
 
-    if (wasPlaying) {
-      this.pause(deck)
-    }
+    // Stop the current source before seeking
+    this.stopSource(deck)
 
+    // Update pause time to the seek position
     deckObj.pauseTime = Math.max(0, Math.min(time, deckObj.buffer?.duration || 0))
 
+    // Resume playback if it was playing
     if (wasPlaying) {
       this.play(deck)
     }

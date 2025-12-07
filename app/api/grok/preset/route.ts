@@ -37,8 +37,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Prompt is required" }, { status: 400 })
     }
 
+    if (!process.env.XAI_API_KEY) {
+      return NextResponse.json({ error: "XAI API key not configured" }, { status: 500 })
+    }
+
     const { object: presetData } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: presetSchema,
       prompt: `Create a DJ mixer preset based on this description:
 

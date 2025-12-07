@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Disc3, Mic, PanelLeftClose, PanelRightClose } from "lucide-react"
 
 export default function DJSystem() {
-  const { tracks } = useTracks()
+  const { tracks, uploadTrack } = useTracks()
   const {
     isInitialized,
     initialize,
@@ -70,6 +70,27 @@ export default function DJSystem() {
       }
     },
     [isInitialized, initialize, loadTrack, musicEngine],
+  )
+
+  const handleLoadTrackOrFile = useCallback(
+    async (trackOrFile: Track | File, deck: "A" | "B") => {
+      let track: Track
+
+      // If it's a File, upload it first
+      if (trackOrFile instanceof File) {
+        // Validate file size
+        if (trackOrFile.size > 50 * 1024 * 1024) {
+          throw new Error(`File "${trackOrFile.name}" is too large. Max size is 50MB.`)
+        }
+        track = await uploadTrack(trackOrFile)
+      } else {
+        track = trackOrFile
+      }
+
+      // Load the track to the deck
+      await handleLoadToDeck(track, deck)
+    },
+    [uploadTrack, handleLoadToDeck],
   )
 
   const handleApplyTransition = useCallback(
@@ -269,17 +290,29 @@ export default function DJSystem() {
           ) : null}
         </div>
 
-        <div className="pointer-events-auto">
-          <button
-            onClick={() => setControlsExpanded(!controlsExpanded)}
-            className="w-full flex items-center justify-center py-1 bg-slate-950/70 backdrop-blur-sm border-t border-purple-500/20 hover:bg-slate-900/80 transition-colors"
-          >
-            {controlsExpanded ? (
-              <ChevronDown className="h-4 w-4 text-slate-400" />
-            ) : (
-              <ChevronUp className="h-4 w-4 text-slate-400" />
-            )}
-          </button>
+        <div className="bg-slate-950/90 backdrop-blur-xl border-t border-purple-500/20 p-4">
+          <div className="max-w-6xl mx-auto flex gap-4">
+            <div className="flex-1">
+              <Deck
+                deck="A"
+                track={trackA}
+                isPlaying={isPlayingA}
+                currentTime={currentTimeA}
+                duration={durationA}
+                onPlay={() => play("A")}
+                onPause={() => pause("A")}
+                onSeek={(time) => seek("A", time)}
+                onGainChange={(gain) =>
+                  updateMusicObject({
+                    tracks: {
+                      ...musicObject.tracks,
+                      A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
+                    },
+                  })
+                }
+                onLoadTrack={handleLoadTrackOrFile}
+              />
+            </div>
 
           {controlsExpanded && (
             <div className="bg-slate-950/80 backdrop-blur-xl border-t border-purple-500/20 p-3">
@@ -305,49 +338,26 @@ export default function DJSystem() {
                   />
                 </div>
 
-                <div className="w-56">
-                  <Mixer
-                    musicObject={musicObject}
-                    onCrossfadeChange={setCrossfade}
-                    onEQChange={(band, value) =>
-                      updateMusicObject({
-                        eq: { ...musicObject.eq, [band]: value },
-                      })
-                    }
-                    onFilterChange={(cutoff) =>
-                      updateMusicObject({
-                        filter: { ...musicObject.filter, cutoff },
-                      })
-                    }
-                    onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
-                    onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
-                    onIsolationChange={handleIsolationChange}
-                    bpmA={bpmA}
-                    bpmB={bpmB}
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <Deck
-                    deck="B"
-                    track={trackB}
-                    isPlaying={isPlayingB}
-                    currentTime={currentTimeB}
-                    duration={durationB}
-                    onPlay={() => play("B")}
-                    onPause={() => pause("B")}
-                    onSeek={(time) => seek("B", time)}
-                    onGainChange={(gain) =>
-                      updateMusicObject({
-                        tracks: {
-                          ...musicObject.tracks,
-                          B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
-                        },
-                      })
-                    }
-                  />
-                </div>
-              </div>
+            <div className="flex-1">
+              <Deck
+                deck="B"
+                track={trackB}
+                isPlaying={isPlayingB}
+                currentTime={currentTimeB}
+                duration={durationB}
+                onPlay={() => play("B")}
+                onPause={() => pause("B")}
+                onSeek={(time) => seek("B", time)}
+                onGainChange={(gain) =>
+                  updateMusicObject({
+                    tracks: {
+                      ...musicObject.tracks,
+                      B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
+                    },
+                  })
+                }
+                onLoadTrack={handleLoadTrackOrFile}
+              />
             </div>
           )}
         </div>

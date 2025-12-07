@@ -1,8 +1,8 @@
 "use client"
 
-import { useRef, useMemo, memo, useState } from "react"
-import { Canvas, useFrame } from "@react-three/fiber"
-import { OrbitControls, PerspectiveCamera, Grid, Stars } from "@react-three/drei"
+import { useRef, useMemo, memo } from "react"
+import { Canvas, useFrame, type ThreeElements } from "@react-three/fiber"
+import { OrbitControls, PerspectiveCamera } from "@react-three/drei"
 import * as THREE from "three"
 import type { MusicObject } from "@/lib/types"
 
@@ -75,8 +75,8 @@ const ParticleVisualizer = memo(function ParticleVisualizer({
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
-        <bufferAttribute attach="attributes-color" count={particleCount} array={colors} itemSize={3} />
+        <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" count={particleCount} array={colors} itemSize={3} args={[colors, 3]} />
       </bufferGeometry>
       <pointsMaterial size={0.1} vertexColors transparent opacity={0.8} blending={THREE.AdditiveBlending} />
     </points>
@@ -140,7 +140,7 @@ const TunnelVisualizer = memo(function TunnelVisualizer({
 
     const time = clock.getElapsedTime()
 
-    groupRef.current.children.forEach((ring, i) => {
+    groupRef.current.children.forEach((ring: THREE.Object3D, i: number) => {
       const freqIndex = Math.floor((i / ringCount) * analyserData.frequency.length)
       const freqValue = (analyserData.frequency[freqIndex] || 0) / 255
 
@@ -193,9 +193,9 @@ const WaveformVisualizer = memo(function WaveformVisualizer({
   })
 
   return (
-    <line ref={lineRef}>
+    <line ref={lineRef as any}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" count={pointCount} array={positions} itemSize={3} />
+        <bufferAttribute attach="attributes-position" count={pointCount} array={positions} itemSize={3} args={[positions, 3]} />
       </bufferGeometry>
       <lineBasicMaterial color="#06b6d4" linewidth={2} />
     </line>

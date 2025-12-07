@@ -45,8 +45,12 @@ export async function POST(request: NextRequest) {
       )
       .join("\n")
 
+    if (!process.env.XAI_API_KEY) {
+      return NextResponse.json({ error: "XAI API key not configured" }, { status: 500 })
+    }
+
     const { object: recommendations } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: recommendationSchema,
       prompt: `Recommend the next tracks to play after this current track:
 
