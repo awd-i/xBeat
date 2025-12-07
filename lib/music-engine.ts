@@ -388,6 +388,9 @@ export class MusicEngine {
   }
 
   setCrossfade(value: number): void {
+    // Update musicObject
+    this.musicObject = { ...this.musicObject, crossfader: value }
+    
     if (!this.deckA.gain || !this.deckB.gain) return
 
     // Equal power crossfade

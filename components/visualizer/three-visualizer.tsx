@@ -440,7 +440,7 @@ export function ThreeVisualizer({ analyserData, musicObject }: VisualizerProps) 
   return (
     <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-purple-950/20 to-slate-950">
       <Canvas dpr={[1, 1.5]} performance={{ min: 0.5 }} style={{ touchAction: "none" }}>
-        <PerspectiveCamera makeDefault position={[0, 3, 8]} />
+        <PerspectiveCamera makeDefault position={[0, 5, 12]} />
         <OrbitControls
           enableZoom={true}
           enablePan={true}
