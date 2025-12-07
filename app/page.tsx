@@ -219,6 +219,11 @@ export default function DJSystem() {
             <h1 className="text-base font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
               xBeat
             </h1>
+            <div className="ml-4 px-2 py-1 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-400/30">
+              <span className="text-xs font-medium bg-gradient-to-r from-purple-300 to-cyan-300 bg-clip-text text-transparent">
+                Made with ❤️ by Ryan, Aidan, and John
+              </span>
+            </div>
           </div>
 
           <VisualizerControls
