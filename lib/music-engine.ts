@@ -1,39 +1,59 @@
 // Web Audio API based music engine
 import type { MusicObject, TransitionPlan } from "./types"
+import { BPMDetector } from "./bpm-detector"
 
 export class MusicEngine {
   private audioContext: AudioContext | null = null
+  private activeSources: { A: AudioBufferSourceNode | null; B: AudioBufferSourceNode | null } = { A: null, B: null }
   private deckA: {
-    source: AudioBufferSourceNode | null
     buffer: AudioBuffer | null
     gain: GainNode | null
     panNode: StereoPannerNode | null
     eqLow: BiquadFilterNode | null
     eqMid: BiquadFilterNode | null
     eqHigh: BiquadFilterNode | null
+    bassIsolate: BiquadFilterNode | null
+    voiceIsolate: BiquadFilterNode | null
+    melodyIsolate: BiquadFilterNode | null
+    bassIsolateGain: GainNode | null
+    voiceIsolateGain: GainNode | null
+    melodyIsolateGain: GainNode | null
+    detectedBPM: number | null
     isPlaying: boolean
     startTime: number
     pauseTime: number
   } = {
-    source: null,
     buffer: null,
     gain: null,
     panNode: null,
     eqLow: null,
     eqMid: null,
     eqHigh: null,
+    bassIsolate: null,
+    voiceIsolate: null,
+    melodyIsolate: null,
+    bassIsolateGain: null,
+    voiceIsolateGain: null,
+    melodyIsolateGain: null,
+    detectedBPM: null,
     isPlaying: false,
     startTime: 0,
     pauseTime: 0,
   }
   private deckB: typeof this.deckA = {
-    source: null,
     buffer: null,
     gain: null,
     panNode: null,
     eqLow: null,
     eqMid: null,
     eqHigh: null,
+    bassIsolate: null,
+    voiceIsolate: null,
+    melodyIsolate: null,
+    bassIsolateGain: null,
+    voiceIsolateGain: null,
+    melodyIsolateGain: null,
+    detectedBPM: null,
     isPlaying: false,
     startTime: 0,
     pauseTime: 0,
@@ -44,12 +64,14 @@ export class MusicEngine {
   private filter: BiquadFilterNode | null = null
   private delayNode: DelayNode | null = null
   private delayFeedback: GainNode | null = null
+  private delayWet: GainNode | null = null
   private reverbNode: ConvolverNode | null = null
   private reverbGain: GainNode | null = null
   private dryGain: GainNode | null = null
 
   private musicObject: MusicObject | null = null
   private transitionInterval: NodeJS.Timeout | null = null
+  private playLock = { A: false, B: false }
 
   async initialize(): Promise<void> {
     if (this.audioContext) return
@@ -73,6 +95,8 @@ export class MusicEngine {
     this.delayNode.delayTime.value = 0.3
     this.delayFeedback = this.audioContext.createGain()
     this.delayFeedback.gain.value = 0
+    this.delayWet = this.audioContext.createGain()
+    this.delayWet.gain.value = 0 // Start with delay disabled
 
     // Reverb (simple convolution)
     this.reverbNode = this.audioContext.createConvolver()
@@ -84,17 +108,20 @@ export class MusicEngine {
     // Create impulse response for reverb
     await this.createReverbImpulse()
 
-    // Connect master chain
+    // Main signal path: filter → dryGain → masterGain
     this.filter.connect(this.dryGain)
+    this.dryGain.connect(this.masterGain)
+
+    // Reverb send: filter → reverb → reverbGain → masterGain
     this.filter.connect(this.reverbNode)
     this.reverbNode.connect(this.reverbGain)
-    this.dryGain.connect(this.masterGain)
     this.reverbGain.connect(this.masterGain)
 
-    // Delay routing
-    this.filter.connect(this.delayNode)
+    // Delay send: filter → delayWet → delayNode → (feedback loop) → masterGain
+    this.filter.connect(this.delayWet)
+    this.delayWet.connect(this.delayNode)
     this.delayNode.connect(this.delayFeedback)
-    this.delayFeedback.connect(this.delayNode)
+    this.delayFeedback.connect(this.delayNode) // Feedback loop
     this.delayNode.connect(this.masterGain)
 
     this.masterGain.connect(this.analyser)
@@ -147,10 +174,50 @@ export class MusicEngine {
     deckObj.eqHigh.frequency.value = 3200
     deckObj.eqHigh.gain.value = 0
 
-    // Connect deck chain
+    // Bass isolation (20Hz - 250Hz)
+    deckObj.bassIsolate = this.audioContext.createBiquadFilter()
+    deckObj.bassIsolate.type = "lowpass"
+    deckObj.bassIsolate.frequency.value = 250
+    deckObj.bassIsolate.Q.value = 1
+    deckObj.bassIsolateGain = this.audioContext.createGain()
+    deckObj.bassIsolateGain.gain.value = 0 // Off by default
+
+    // Voice isolation (300Hz - 3.4kHz)
+    deckObj.voiceIsolate = this.audioContext.createBiquadFilter()
+    deckObj.voiceIsolate.type = "bandpass"
+    deckObj.voiceIsolate.frequency.value = 1850 // Center of voice range
+    deckObj.voiceIsolate.Q.value = 0.7
+    deckObj.voiceIsolateGain = this.audioContext.createGain()
+    deckObj.voiceIsolateGain.gain.value = 0 // Off by default
+
+    // Melody isolation (1kHz - 8kHz)
+    deckObj.melodyIsolate = this.audioContext.createBiquadFilter()
+    deckObj.melodyIsolate.type = "highpass"
+    deckObj.melodyIsolate.frequency.value = 1000
+    deckObj.melodyIsolate.Q.value = 1
+    deckObj.melodyIsolateGain = this.audioContext.createGain()
+    deckObj.melodyIsolateGain.gain.value = 0 // Off by default
+
+    // Connect deck chain with advanced filters
     deckObj.eqLow.connect(deckObj.eqMid)
     deckObj.eqMid.connect(deckObj.eqHigh)
+
+    // Connect advanced filters in parallel
+    deckObj.eqHigh.connect(deckObj.bassIsolate)
+    deckObj.bassIsolate.connect(deckObj.bassIsolateGain)
+    deckObj.bassIsolateGain.connect(deckObj.panNode)
+
+    deckObj.eqHigh.connect(deckObj.voiceIsolate)
+    deckObj.voiceIsolate.connect(deckObj.voiceIsolateGain)
+    deckObj.voiceIsolateGain.connect(deckObj.panNode)
+
+    deckObj.eqHigh.connect(deckObj.melodyIsolate)
+    deckObj.melodyIsolate.connect(deckObj.melodyIsolateGain)
+    deckObj.melodyIsolateGain.connect(deckObj.panNode)
+
+    // Also connect direct path (when all isolations are off)
     deckObj.eqHigh.connect(deckObj.panNode)
+
     deckObj.panNode.connect(deckObj.gain)
     deckObj.gain.connect(this.filter)
   }
@@ -161,17 +228,51 @@ export class MusicEngine {
 
     const deckObj = deck === "A" ? this.deckA : this.deckB
 
-    // Stop current playback
-    if (deckObj.source && deckObj.isPlaying) {
-      deckObj.source.stop()
-      deckObj.isPlaying = false
-    }
+    this.stopDeck(deck)
 
     // Fetch and decode audio
     const response = await fetch(url)
     const arrayBuffer = await response.arrayBuffer()
     deckObj.buffer = await this.audioContext.decodeAudioData(arrayBuffer)
     deckObj.pauseTime = 0
+
+    this.detectBPM(deck, deckObj.buffer)
+  }
+
+  private async detectBPM(deck: "A" | "B", buffer: AudioBuffer): Promise<void> {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+
+    try {
+      const detector = new BPMDetector(buffer.sampleRate)
+      const bpm = await detector.detectBPM(buffer)
+      deckObj.detectedBPM = bpm
+    } catch (error) {
+      console.error(`BPM detection failed for deck ${deck}:`, error)
+      deckObj.detectedBPM = null
+    }
+  }
+
+  getBPM(deck: "A" | "B"): number | null {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    return deckObj.detectedBPM
+  }
+
+  private stopDeck(deck: "A" | "B"): void {
+    const deckObj = deck === "A" ? this.deckA : this.deckB
+    const activeSource = this.activeSources[deck]
+
+    if (activeSource) {
+      try {
+        activeSource.onended = null
+        activeSource.stop()
+        activeSource.disconnect()
+      } catch (e) {
+        // Source may already be stopped
+      }
+      this.activeSources[deck] = null
+    }
+
+    deckObj.isPlaying = false
   }
 
   play(deck?: "A" | "B"): void {
@@ -180,25 +281,53 @@ export class MusicEngine {
     const decks = deck ? [deck] : (["A", "B"] as const)
 
     for (const d of decks) {
-      const deckObj = d === "A" ? this.deckA : this.deckB
-      if (!deckObj.buffer || !deckObj.eqLow || deckObj.isPlaying) continue
-
-      deckObj.source = this.audioContext.createBufferSource()
-      deckObj.source.buffer = deckObj.buffer
-      deckObj.source.connect(deckObj.eqLow)
-
-      // Apply playback rate if set
-      if (this.musicObject?.tracks[d]?.playbackRate) {
-        deckObj.source.playbackRate.value = this.musicObject.tracks[d]!.playbackRate
+      if (this.playLock[d]) {
+        continue
       }
 
-      deckObj.source.start(0, deckObj.pauseTime)
-      deckObj.startTime = this.audioContext.currentTime - deckObj.pauseTime
+      const deckObj = d === "A" ? this.deckA : this.deckB
+
+      if (!deckObj.buffer || !deckObj.eqLow) {
+        continue
+      }
+
+      if (deckObj.isPlaying) {
+        continue
+      }
+
+      if (this.activeSources[d]) {
+        this.stopDeck(d)
+      }
+
+      this.playLock[d] = true
       deckObj.isPlaying = true
 
-      deckObj.source.onended = () => {
-        deckObj.isPlaying = false
-        deckObj.pauseTime = 0
+      try {
+        const source = this.audioContext.createBufferSource()
+        source.buffer = deckObj.buffer
+        source.connect(deckObj.eqLow)
+
+        const trackSettings = this.musicObject?.tracks?.[d]
+        if (trackSettings?.playbackRate) {
+          source.playbackRate.value = trackSettings.playbackRate
+        }
+
+        this.activeSources[d] = source
+
+        source.start(0, deckObj.pauseTime)
+        deckObj.startTime = this.audioContext.currentTime - deckObj.pauseTime
+
+        const currentSource = source
+        source.onended = () => {
+          if (this.activeSources[d] === currentSource) {
+            deckObj.isPlaying = false
+            deckObj.pauseTime = 0
+            this.activeSources[d] = null
+            this.playLock[d] = false
+          }
+        }
+      } finally {
+        this.playLock[d] = false
       }
     }
   }
@@ -210,10 +339,21 @@ export class MusicEngine {
 
     for (const d of decks) {
       const deckObj = d === "A" ? this.deckA : this.deckB
-      if (!deckObj.source || !deckObj.isPlaying) continue
+      const activeSource = this.activeSources[d]
+
+      if (!deckObj.isPlaying || !activeSource) continue
 
       deckObj.pauseTime = this.audioContext.currentTime - deckObj.startTime
-      deckObj.source.stop()
+
+      try {
+        activeSource.onended = null
+        activeSource.stop()
+        activeSource.disconnect()
+      } catch (e) {
+        // Source may already be stopped
+      }
+
+      this.activeSources[d] = null
       deckObj.isPlaying = false
     }
   }
@@ -268,11 +408,9 @@ export class MusicEngine {
     }
 
     // Delay
-    if (obj.delayAmount !== undefined && this.delayFeedback) {
+    if (obj.delayAmount !== undefined && this.delayFeedback && this.delayWet) {
       this.delayFeedback.gain.value = obj.delayAmount * 0.6
-    }
-    if (obj.delayFeedback !== undefined && this.delayFeedback) {
-      // Already handled above in delayAmount
+      this.delayWet.gain.value = obj.delayAmount // Update delay wet gain
     }
 
     // Track settings
@@ -288,8 +426,18 @@ export class MusicEngine {
           if (settings.pan !== undefined && deck.panNode) {
             deck.panNode.pan.value = settings.pan
           }
-          if (settings.playbackRate !== undefined && deck.source) {
-            deck.source.playbackRate.value = settings.playbackRate
+          if (settings.playbackRate !== undefined && this.activeSources[deckKey]) {
+            this.activeSources[deckKey].playbackRate.value = settings.playbackRate
+          }
+
+          if ((settings as any).bassIsolation !== undefined && deck.bassIsolateGain) {
+            deck.bassIsolateGain.gain.value = (settings as any).bassIsolation
+          }
+          if ((settings as any).voiceIsolation !== undefined && deck.voiceIsolateGain) {
+            deck.voiceIsolateGain.gain.value = (settings as any).voiceIsolation
+          }
+          if ((settings as any).melodyIsolation !== undefined && deck.melodyIsolateGain) {
+            deck.melodyIsolateGain.gain.value = (settings as any).melodyIsolation
           }
         }
       }
@@ -297,7 +445,15 @@ export class MusicEngine {
   }
 
   applyTransitionPlan(plan: TransitionPlan): void {
+    console.log("[v0] MusicEngine: Starting transition plan execution", {
+      duration: plan.durationSeconds,
+      crossfadePoints: plan.crossfadeAutomation.length,
+      hasFilterAutomation: !!plan.filterAutomation,
+      hasFxAutomation: !!plan.fxAutomation,
+    })
+
     if (this.transitionInterval) {
+      console.log("[v0] MusicEngine: Clearing existing transition")
       clearInterval(this.transitionInterval)
     }
 
@@ -335,9 +491,11 @@ export class MusicEngine {
         )
         if (this.reverbGain) this.reverbGain.gain.value = reverb
         if (this.delayFeedback) this.delayFeedback.gain.value = delay * 0.6
+        if (this.delayWet) this.delayWet.gain.value = delay // Update delay wet gain
       }
 
       if (progress >= 1) {
+        console.log("[v0] MusicEngine: Transition completed")
         clearInterval(this.transitionInterval!)
         this.transitionInterval = null
       }
@@ -430,7 +588,8 @@ export class MusicEngine {
       clearInterval(this.transitionInterval)
     }
 
-    this.pause()
+    this.stopDeck("A")
+    this.stopDeck("B")
 
     if (this.audioContext) {
       this.audioContext.close()

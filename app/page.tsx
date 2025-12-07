@@ -12,7 +12,7 @@ import { GrokCopilot } from "@/components/grok/grok-copilot"
 import { VoiceControl } from "@/components/grok/voice-control"
 import { VisualizerControls } from "@/components/dj/visualizer-controls"
 import { Button } from "@/components/ui/button"
-import { Disc3, Mic } from "lucide-react"
+import { ChevronDown, ChevronUp, Disc3, Mic, PanelLeftClose, PanelRightClose } from "lucide-react"
 
 export default function DJSystem() {
   const { tracks } = useTracks()
@@ -35,6 +35,7 @@ export default function DJSystem() {
     musicObject,
     analyserData,
     getAnalyserData,
+    musicEngine,
   } = useMusicEngine()
 
   const [trackA, setTrackA] = useState<Track | null>(null)
@@ -42,6 +43,9 @@ export default function DJSystem() {
   const [showLibrary, setShowLibrary] = useState(true)
   const [showCopilot, setShowCopilot] = useState(true)
   const [showVoiceControl, setShowVoiceControl] = useState(false)
+  const [controlsExpanded, setControlsExpanded] = useState(true)
+  const [bpmA, setBpmA] = useState<number | null>(null)
+  const [bpmB, setBpmB] = useState<number | null>(null)
 
   const handleLoadToDeck = useCallback(
     async (track: Track, deck: "A" | "B") => {
@@ -53,29 +57,68 @@ export default function DJSystem() {
 
       if (deck === "A") {
         setTrackA(track)
+        setTimeout(() => {
+          const bpm = musicEngine?.getBPM("A")
+          setBpmA(bpm)
+        }, 1000)
       } else {
         setTrackB(track)
+        setTimeout(() => {
+          const bpm = musicEngine?.getBPM("B")
+          setBpmB(bpm)
+        }, 1000)
       }
     },
-    [isInitialized, initialize, loadTrack],
+    [isInitialized, initialize, loadTrack, musicEngine],
   )
 
   const handleApplyTransition = useCallback(
     (plan: TransitionPlan) => {
+      console.log("[v0] Applying transition plan:", plan)
+
+      // Ensure both decks are playing before starting transition
+      if (!isPlayingA && trackA) {
+        console.log("[v0] Starting deck A for transition")
+        play("A")
+      }
+      if (!isPlayingB && trackB) {
+        console.log("[v0] Starting deck B for transition")
+        play("B")
+      }
+
+      // Apply the transition automation
       applyTransitionPlan(plan)
 
+      // Apply visualizer config if present
       if (plan.visualizerConfig) {
+        console.log("[v0] Applying visualizer config:", plan.visualizerConfig)
         updateMusicObject(plan.visualizerConfig)
       }
+
+      console.log("[v0] Transition started, duration:", plan.durationSeconds, "seconds")
     },
-    [applyTransitionPlan, updateMusicObject],
+    [applyTransitionPlan, updateMusicObject, isPlayingA, isPlayingB, trackA, trackB, play],
   )
 
   const handleApplyPreset = useCallback(
     (preset: Partial<MusicObject>) => {
-      updateMusicObject(preset)
+      console.log("[v0] Applying preset to mixer:", preset)
+
+      const merged: Partial<MusicObject> = {
+        ...preset,
+        eq: preset.eq ? { ...musicObject.eq, ...preset.eq } : musicObject.eq,
+        filter: preset.filter ? { ...musicObject.filter, ...preset.filter } : musicObject.filter,
+        tracks: preset.tracks
+          ? {
+              A: preset.tracks.A ? { ...musicObject.tracks.A, ...preset.tracks.A } : musicObject.tracks.A,
+              B: preset.tracks.B ? { ...musicObject.tracks.B, ...preset.tracks.B } : musicObject.tracks.B,
+            }
+          : musicObject.tracks,
+      }
+
+      updateMusicObject(merged)
     },
-    [updateMusicObject],
+    [updateMusicObject, musicObject],
   )
 
   const handleVoiceAction = useCallback(
@@ -119,19 +162,38 @@ export default function DJSystem() {
     [isInitialized, initialize, play, pause, musicObject.crossfader, setCrossfade],
   )
 
+  const handleIsolationChange = useCallback(
+    (deck: "A" | "B", type: "bass" | "voice" | "melody", value: number) => {
+      const trackSettings = musicObject.tracks[deck]
+      if (!trackSettings) return
+
+      const isolationKey = `${type}Isolation` as any
+      updateMusicObject({
+        tracks: {
+          ...musicObject.tracks,
+          [deck]: {
+            ...trackSettings,
+            [isolationKey]: value,
+          },
+        },
+      })
+    },
+    [musicObject.tracks, updateMusicObject],
+  )
+
   return (
     <div className="h-screen w-screen overflow-hidden bg-slate-950 flex flex-col">
       <div className="absolute inset-0 z-0">
         <ThreeVisualizer analyserData={analyserData} musicObject={musicObject} />
       </div>
 
-      <div className="relative z-10 flex flex-col h-full">
-        <header className="flex items-center justify-between px-4 py-2 bg-slate-950/80 backdrop-blur-sm border-b border-purple-500/20">
+      <div className="relative z-10 flex flex-col h-full pointer-events-none">
+        <header className="pointer-events-auto flex items-center justify-between px-3 py-1.5 bg-slate-950/70 backdrop-blur-sm border-b border-purple-500/20">
           <div className="flex items-center gap-2">
             <div className="relative">
-              <Disc3 className="h-6 w-6 text-purple-400 animate-[spin_3s_linear_infinite]" />
+              <Disc3 className="h-5 w-5 text-purple-400 animate-[spin_3s_linear_infinite]" />
             </div>
-            <h1 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
+            <h1 className="text-base font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
               xBeat
             </h1>
           </div>
@@ -143,28 +205,30 @@ export default function DJSystem() {
             onColorSchemeChange={(scheme) => updateMusicObject({ colorScheme: scheme })}
           />
 
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowLibrary(!showLibrary)}
-              className={showLibrary ? "text-purple-400" : "text-slate-400"}
+              className={`h-7 px-2 ${showLibrary ? "text-purple-400" : "text-slate-400"}`}
             >
+              <PanelLeftClose className="h-4 w-4 mr-1" />
               Library
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowCopilot(!showCopilot)}
-              className={showCopilot ? "text-cyan-400" : "text-slate-400"}
+              className={`h-7 px-2 ${showCopilot ? "text-cyan-400" : "text-slate-400"}`}
             >
               Grok
+              <PanelRightClose className="h-4 w-4 ml-1" />
             </Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowVoiceControl(!showVoiceControl)}
-              className={showVoiceControl ? "text-green-400" : "text-slate-400"}
+              className={`h-7 px-2 ${showVoiceControl ? "text-green-400" : "text-slate-400"}`}
             >
               <Mic className="h-4 w-4 mr-1" />
               Voice
@@ -172,17 +236,15 @@ export default function DJSystem() {
           </div>
         </header>
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden relative">
           {showLibrary && (
-            <div className="w-72 p-3 overflow-hidden">
+            <div className="pointer-events-auto absolute left-0 top-0 bottom-0 w-64 p-2 overflow-hidden bg-slate-950/70 backdrop-blur-sm border-r border-purple-500/20">
               <MusicLibrary onLoadToDeck={handleLoadToDeck} />
             </div>
           )}
 
-          <div className="flex-1" />
-
           {showVoiceControl ? (
-            <div className="w-80 p-3 overflow-hidden">
+            <div className="pointer-events-auto absolute right-0 top-0 bottom-0 w-72 p-2 overflow-hidden bg-slate-950/70 backdrop-blur-sm border-l border-cyan-500/20">
               <VoiceControl
                 trackA={trackA}
                 trackB={trackB}
@@ -193,7 +255,7 @@ export default function DJSystem() {
               />
             </div>
           ) : showCopilot ? (
-            <div className="w-80 p-3 overflow-hidden">
+            <div className="pointer-events-auto absolute right-0 top-0 bottom-0 w-72 p-2 overflow-hidden bg-slate-950/70 backdrop-blur-sm border-l border-cyan-500/20">
               <GrokCopilot
                 trackA={trackA}
                 trackB={trackB}
@@ -207,69 +269,87 @@ export default function DJSystem() {
           ) : null}
         </div>
 
-        <div className="bg-slate-950/90 backdrop-blur-xl border-t border-purple-500/20 p-4">
-          <div className="max-w-6xl mx-auto flex gap-4">
-            <div className="flex-1">
-              <Deck
-                deck="A"
-                track={trackA}
-                isPlaying={isPlayingA}
-                currentTime={currentTimeA}
-                duration={durationA}
-                onPlay={() => play("A")}
-                onPause={() => pause("A")}
-                onSeek={(time) => seek("A", time)}
-                onGainChange={(gain) =>
-                  updateMusicObject({
-                    tracks: {
-                      ...musicObject.tracks,
-                      A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
-                    },
-                  })
-                }
-              />
-            </div>
+        <div className="pointer-events-auto">
+          <button
+            onClick={() => setControlsExpanded(!controlsExpanded)}
+            className="w-full flex items-center justify-center py-1 bg-slate-950/70 backdrop-blur-sm border-t border-purple-500/20 hover:bg-slate-900/80 transition-colors"
+          >
+            {controlsExpanded ? (
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            ) : (
+              <ChevronUp className="h-4 w-4 text-slate-400" />
+            )}
+          </button>
 
-            <div className="w-64">
-              <Mixer
-                musicObject={musicObject}
-                onCrossfadeChange={setCrossfade}
-                onEQChange={(band, value) =>
-                  updateMusicObject({
-                    eq: { ...musicObject.eq, [band]: value },
-                  })
-                }
-                onFilterChange={(cutoff) =>
-                  updateMusicObject({
-                    filter: { ...musicObject.filter, cutoff },
-                  })
-                }
-                onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
-                onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
-              />
-            </div>
+          {controlsExpanded && (
+            <div className="bg-slate-950/80 backdrop-blur-xl border-t border-purple-500/20 p-3">
+              <div className="max-w-5xl mx-auto flex gap-3">
+                <div className="flex-1">
+                  <Deck
+                    deck="A"
+                    track={trackA}
+                    isPlaying={isPlayingA}
+                    currentTime={currentTimeA}
+                    duration={durationA}
+                    onPlay={() => play("A")}
+                    onPause={() => pause("A")}
+                    onSeek={(time) => seek("A", time)}
+                    onGainChange={(gain) =>
+                      updateMusicObject({
+                        tracks: {
+                          ...musicObject.tracks,
+                          A: musicObject.tracks.A ? { ...musicObject.tracks.A, gain } : null,
+                        },
+                      })
+                    }
+                  />
+                </div>
 
-            <div className="flex-1">
-              <Deck
-                deck="B"
-                track={trackB}
-                isPlaying={isPlayingB}
-                currentTime={currentTimeB}
-                duration={durationB}
-                onPlay={() => play("B")}
-                onPause={() => pause("B")}
-                onSeek={(time) => seek("B", time)}
-                onGainChange={(gain) =>
-                  updateMusicObject({
-                    tracks: {
-                      ...musicObject.tracks,
-                      B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
-                    },
-                  })
-                }
-              />
+                <div className="w-56">
+                  <Mixer
+                    musicObject={musicObject}
+                    onCrossfadeChange={setCrossfade}
+                    onEQChange={(band, value) =>
+                      updateMusicObject({
+                        eq: { ...musicObject.eq, [band]: value },
+                      })
+                    }
+                    onFilterChange={(cutoff) =>
+                      updateMusicObject({
+                        filter: { ...musicObject.filter, cutoff },
+                      })
+                    }
+                    onReverbChange={(value) => updateMusicObject({ reverbAmount: value })}
+                    onDelayChange={(value) => updateMusicObject({ delayAmount: value })}
+                    onIsolationChange={handleIsolationChange}
+                    bpmA={bpmA}
+                    bpmB={bpmB}
+                  />
+                </div>
+
+                <div className="flex-1">
+                  <Deck
+                    deck="B"
+                    track={trackB}
+                    isPlaying={isPlayingB}
+                    currentTime={currentTimeB}
+                    duration={durationB}
+                    onPlay={() => play("B")}
+                    onPause={() => pause("B")}
+                    onSeek={(time) => seek("B", time)}
+                    onGainChange={(gain) =>
+                      updateMusicObject({
+                        tracks: {
+                          ...musicObject.tracks,
+                          B: musicObject.tracks.B ? { ...musicObject.tracks.B, gain } : null,
+                        },
+                      })
+                    }
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

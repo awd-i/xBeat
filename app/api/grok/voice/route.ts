@@ -81,15 +81,37 @@ When responding to commands:
 
 For mixer control commands, include a JSON block like this in your response:
 \`\`\`json
-{"action": "mixer", "settings": {"crossfader": 0.5, "eq": {"low": 0, "mid": 0, "high": 0}, "reverbAmount": 0.2, "delayAmount": 0.1, "filter": {"type": "lowpass", "cutoff": 20000}}}
+{
+  "action": "mixer",
+  "settings": {
+    "crossfader": 0.5,
+    "masterGain": 0.8,
+    "eq": {"low": 2, "mid": 0, "high": -1},
+    "filter": {"type": "lowpass", "cutoff": 5000},
+    "reverbAmount": 0.2,
+    "delayAmount": 0.1,
+    "tracks": {
+      "A": {"gain": 0.9, "bassIsolation": 0.5, "voiceIsolation": 0, "melodyIsolation": 0},
+      "B": {"gain": 0.9, "bassIsolation": 0, "voiceIsolation": 0, "melodyIsolation": 0}
+    }
+  }
+}
 \`\`\`
 
-Available actions:
-- "mixer" - Apply mixer settings
-- "transition" - Start a transition (include "transitionType": "smooth" | "cut" | "filter" | "echo")
-- "play" - Play deck ("deck": "A" | "B" | "both")
-- "pause" - Pause deck ("deck": "A" | "B" | "both")
-- "analyze" - Analyze current tracks
+IMPORTANT: For common commands, respond with the appropriate JSON:
+- "More bass" / "Add bass": Set eq.low to 3-6dB
+- "Less bass" / "Cut bass": Set eq.low to -3 to -6dB
+- "Drop the filter" / "Filter down": Set filter.cutoff to 500-2000Hz
+- "Open the filter" / "Filter up": Set filter.cutoff to 15000-20000Hz
+- "Fade to A" / "Crossfade to A": Set crossfader to 0
+- "Fade to B" / "Crossfade to B": Set crossfader to 1
+- "Add reverb": Set reverbAmount to 0.3-0.5
+- "Add delay" / "Echo": Set delayAmount to 0.3-0.5
+- "Boost highs": Set eq.high to 3-6dB
+- "Cut mids": Set eq.mid to -3 to -6dB
+- "Isolate bass on A": Set tracks.A.bassIsolation to 1, others to 0
+- "Isolate vocals on B": Set tracks.B.voiceIsolation to 1, others to 0
+- "Isolate melody on A": Set tracks.A.melodyIsolation to 1, others to 0
 
 ${audioContext}
 ${trackContext}

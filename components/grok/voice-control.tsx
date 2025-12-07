@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Mic, MicOff, Volume2, VolumeX, Send, Loader2, Sparkles, AudioWaveform } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { deepMerge } from "@/lib/utils"
 
 interface VoiceControlProps {
   trackA: Track | null
@@ -193,6 +194,10 @@ export function VoiceControl({
         if (jsonMatch) {
           try {
             const parsed: ParsedAction = JSON.parse(jsonMatch[1])
+            if (parsed.settings) {
+              console.log("[v0] Applying Grok settings:", parsed.settings)
+              onApplySettings(deepMerge(musicObject, parsed.settings))
+            }
             handleAction(parsed)
           } catch (e) {
             console.error("Failed to parse action JSON:", e)
