@@ -4,7 +4,7 @@ import type React from "react"
 
 import type { MusicObject } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Waves, Sparkles, CircleDot, AudioWaveform } from "lucide-react"
+import { Waves, Sparkles, CircleDot, AudioWaveform, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface VisualizerControlsProps {
@@ -23,6 +23,7 @@ export function VisualizerControls({
     { value: "cymatic", icon: <Waves className="h-3.5 w-3.5" />, label: "Cymatic" },
     { value: "tunnel", icon: <CircleDot className="h-3.5 w-3.5" />, label: "Tunnel" },
     { value: "waveform", icon: <AudioWaveform className="h-3.5 w-3.5" />, label: "Waveform" },
+    { value: "grok", icon: <Zap className="h-3.5 w-3.5" />, label: "Grok Logo" },
   ]
 
   const colorSchemes: { value: MusicObject["colorScheme"]; colors: string[] }[] = [

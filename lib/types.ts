@@ -64,7 +64,7 @@ export interface MusicObject {
 
   filter: FilterSettings
 
-  visualizerMode: "cymatic" | "particles" | "tunnel" | "waveform"
+  visualizerMode: "cymatic" | "particles" | "tunnel" | "waveform" | "grok"
   visualSensitivity: number
   colorScheme: "cyberpunk" | "neon" | "monochrome" | "fire"
 }
