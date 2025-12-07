@@ -1,5 +1,6 @@
 // Web Audio API based music engine
 import type { MusicObject, TransitionPlan } from "./types"
+import { defaultMusicObject } from "./types"
 import { BPMDetector } from "./bpm-detector"
 
 export interface TransitionState {
@@ -84,7 +85,7 @@ export class MusicEngine {
   private reverbGain: GainNode | null = null
   private dryGain: GainNode | null = null
 
-  private musicObject: MusicObject | null = null
+  private musicObject: MusicObject = { ...defaultMusicObject }
   private transitionInterval: NodeJS.Timeout | null = null
   private playLock = { A: false, B: false }
   private transitionState: TransitionState = {
@@ -398,9 +399,11 @@ export class MusicEngine {
   }
 
   updateMusicObject(obj: Partial<MusicObject>): void {
-    if (!this.audioContext) return
-
+    // Always update musicObject for visualizer settings (they don't require audio context)
     this.musicObject = { ...this.musicObject, ...obj } as MusicObject
+    
+    // Return early for audio-related updates if context doesn't exist
+    if (!this.audioContext) return
 
     // Master gain
     if (obj.masterGain !== undefined && this.masterGain && isFinite(obj.masterGain)) {
@@ -691,7 +694,7 @@ export class MusicEngine {
     return deckObj.buffer !== null
   }
 
-  getMusicObject(): MusicObject | null {
+  getMusicObject(): MusicObject {
     return this.musicObject
   }
 
