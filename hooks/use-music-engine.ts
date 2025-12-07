@@ -133,13 +133,21 @@ export function useMusicEngine() {
   const setCrossfade = useCallback((value: number) => {
     if (!engineRef.current) return
     engineRef.current.setCrossfade(value)
-    setMusicObject((prev) => ({ ...prev, crossfader: value }))
+    // Force immediate sync
+    const updated = engineRef.current.getMusicObject()
+    if (updated) {
+      setMusicObject(updated)
+    }
   }, [])
 
   const updateMusicObject = useCallback((updates: Partial<MusicObject>) => {
     if (!engineRef.current) return
     engineRef.current.updateMusicObject(updates)
-    setMusicObject((prev) => ({ ...prev, ...updates }))
+    // Force immediate sync
+    const updated = engineRef.current.getMusicObject()
+    if (updated) {
+      setMusicObject(updated)
+    }
   }, [])
 
   const applyTransitionPlan = useCallback((plan: TransitionPlan) => {

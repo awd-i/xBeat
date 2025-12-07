@@ -20,6 +20,8 @@ interface VoiceControlProps {
   getAnalyserData: () => { frequency: Uint8Array; timeDomain: Uint8Array }
   onApplySettings: (settings: Partial<MusicObject>) => void
   onAction: (action: string, params?: Record<string, unknown>) => void
+  onLoadTrack: (track: Track, deck: "A" | "B") => void
+  tracks: Track[]
 }
 
 interface ParsedAction {
@@ -27,6 +29,8 @@ interface ParsedAction {
   settings?: Partial<MusicObject>
   deck?: "A" | "B" | "both"
   transitionType?: string
+  trackId?: string
+  trackTitle?: string
 }
 
 type GrokVoice = "Ara" | "Rex" | "Sal" | "Eve" | "Una" | "Leo"
@@ -38,6 +42,8 @@ export function VoiceControl({
   getAnalyserData,
   onApplySettings,
   onAction,
+  onLoadTrack,
+  tracks,
 }: VoiceControlProps) {
   const [textInput, setTextInput] = useState("")
   const [audioSnapshot, setAudioSnapshot] = useState<AudioSnapshot | null>(null)
@@ -47,9 +53,10 @@ export function VoiceControl({
   const [isLoading, setIsLoading] = useState(false)
 
   const [isSpeaking, setIsSpeaking] = useState(false)
-  const [ttsEnabled, setTtsEnabled] = useState(true)
+  const [ttsEnabled, setTtsEnabled] = useState(false)
   const [grokVoice, setGrokVoice] = useState<GrokVoice>("Ara")
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const speakText = useCallback(
     async (text: string) => {
@@ -124,19 +131,40 @@ export function VoiceControl({
             onApplySettings(parsed.settings)
           }
           break
+        case "loadTrack":
+          if (parsed.deck && (parsed.deck === "A" || parsed.deck === "B")) {
+            // Find track by ID or partial title match
+            const track = tracks.find(t => 
+              t.id === parsed.trackId || 
+              (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase()))
+            )
+            if (track) {
+              onLoadTrack(track, parsed.deck)
+              // Auto-play after loading
+              setTimeout(() => onAction("play", { deck: parsed.deck }), 500)
+            }
+          }
+          break
         case "play":
+          if (parsed.deck) {
+            onAction("play", { deck: parsed.deck })
+          } else {
+            onAction("play", { deck: "both" })
+          }
+          break
         case "pause":
-          onAction(parsed.action, { deck: parsed.deck })
+          if (parsed.deck) {
+            onAction("pause", { deck: parsed.deck })
+          } else {
+            onAction("pause", { deck: "both" })
+          }
           break
         case "transition":
           onAction("transition", { type: parsed.transitionType })
           break
-        case "analyze":
-          onAction("analyze")
-          break
       }
     },
-    [onApplySettings, onAction],
+    [onApplySettings, onAction, onLoadTrack, tracks],
   )
 
   const sendMessage = useCallback(
@@ -156,10 +184,15 @@ export function VoiceControl({
             currentTrackB: trackB,
             musicObject,
             conversationHistory: localMessages.slice(-10),
+            availableTracks: tracks,
           }),
         })
 
-        if (!response.ok) throw new Error("Failed to get response")
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error("[VoiceControl] Error:", response.status, errorText)
+          throw new Error(`Failed to get response: ${response.status}`)
+        }
 
         const reader = response.body?.getReader()
         if (!reader) throw new Error("No reader")
@@ -175,15 +208,64 @@ export function VoiceControl({
           if (done) break
 
           const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split("\n")
+          const lines = chunk.split("\n").filter(line => line.trim())
+          
           for (const line of lines) {
+            
+            // Skip [DONE] marker
+            if (line.trim() === "[DONE]" || line.trim() === "data: [DONE]") {
+              console.log("[VoiceControl] Stream done marker received")
+              continue
+            }
+            
             if (line.startsWith("0:")) {
               try {
                 const text = JSON.parse(line.slice(2))
                 fullText += text
                 setLocalMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullText } : m)))
-              } catch {
+              } catch (e) {
                 // Ignore parse errors
+              }
+            } 
+            else if (line.startsWith("8:")) {
+              console.error("[VoiceControl] Error from stream:", line.slice(2))
+            }
+            else if (line.startsWith("2:")) {
+              try {
+                const parsed = JSON.parse(line.slice(2))
+                if (parsed.content) {
+                  fullText += parsed.content
+                  setLocalMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullText } : m)))
+                }
+              } catch (e) {
+                // Ignore
+              }
+            }
+            else if (line.startsWith("data: ")) {
+              const jsonStr = line.slice(6).trim()
+              if (jsonStr && jsonStr !== "[DONE]") {
+                try {
+                  const data = JSON.parse(jsonStr)
+                  const content = data.delta || data.choices?.[0]?.delta?.content || data.content || data.text
+                  if (content) {
+                    fullText += content
+                    setLocalMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullText } : m)))
+                  }
+                } catch (e) {
+                  // Ignore
+                }
+              }
+            } 
+            else if (line.startsWith("{")) {
+              try {
+                const data = JSON.parse(line)
+                const content = data.delta || data.choices?.[0]?.delta?.content || data.content || data.text
+                if (content) {
+                  fullText += content
+                  setLocalMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: fullText } : m)))
+                }
+              } catch (e) {
+                // Ignore
               }
             }
           }
@@ -195,12 +277,83 @@ export function VoiceControl({
           try {
             const parsed: ParsedAction = JSON.parse(jsonMatch[1])
             if (parsed.settings) {
-              console.log("[v0] Applying Grok settings:", parsed.settings)
               onApplySettings(deepMerge(musicObject, parsed.settings))
             }
             handleAction(parsed)
           } catch (e) {
             console.error("Failed to parse action JSON:", e)
+          }
+        } else {
+          
+          // Fallback: Try to parse common commands from text
+          const lowerText = fullText.toLowerCase()
+          let fallbackSettings: any = {}
+          let fallbackAction: ParsedAction | null = null
+          
+          // Track loading
+          const loadMatch = lowerText.match(/load.*?(deck\s+)?(a|b)/i)
+          if (loadMatch && tracks.length > 0) {
+            const deck = loadMatch[2].toUpperCase() as "A" | "B"
+            // Try to find a track by name in the text
+            const trackMatch = tracks.find(t => lowerText.includes(t.title.toLowerCase().slice(0, 10)))
+            if (trackMatch) {
+              fallbackAction = { action: "loadTrack", trackId: trackMatch.id, deck }
+            } else {
+              // Load first available track if no specific track mentioned
+              fallbackAction = { action: "loadTrack", trackId: tracks[0].id, deck }
+            }
+          }
+          
+          // Play/Pause
+          if (lowerText.match(/\b(play|start)\b/) && !fallbackAction) {
+            fallbackAction = { action: "play" }
+          } else if (lowerText.match(/\b(pause|stop)\b/) && !fallbackAction) {
+            fallbackAction = { action: "pause" }
+          }
+          
+          // Bass controls
+          if (lowerText.match(/\b(more|add|boost|increase|pump|up)\b.*\bbass\b|\bbass\b.*(more|add|boost|increase|pump|up)\b/)) {
+            fallbackSettings.eq = { ...musicObject.eq, low: 5 }
+          } else if (lowerText.match(/\b(less|cut|reduce|lower|decrease|down)\b.*\bbass\b|\bbass\b.*(less|cut|reduce|lower|decrease|down)\b/)) {
+            fallbackSettings.eq = { ...musicObject.eq, low: -5 }
+          }
+          
+          // Highs controls
+          if (lowerText.match(/\b(more|add|boost|increase|brighten)\b.*\b(high|highs|treble)\b|\b(high|highs|treble)\b.*(more|add|boost|increase)\b/)) {
+            fallbackSettings.eq = { ...fallbackSettings.eq, ...musicObject.eq, high: 4 }
+          } else if (lowerText.match(/\b(less|cut|reduce|lower)\b.*\b(high|highs|treble)\b|\b(high|highs|treble)\b.*(less|cut|reduce|lower)\b/)) {
+            fallbackSettings.eq = { ...fallbackSettings.eq, ...musicObject.eq, high: -4 }
+          }
+          
+          // Filter controls
+          if (lowerText.match(/\bfilter\b.*(drop|down|close|lower|cut)|\b(drop|down|close|lower|cut)\b.*\bfilter\b/)) {
+            fallbackSettings.filter = { ...musicObject.filter, cutoff: 800 }
+          } else if (lowerText.match(/\bfilter\b.*(open|up|raise|lift)|\b(open|up|raise|lift)\b.*\bfilter\b/)) {
+            fallbackSettings.filter = { ...musicObject.filter, cutoff: 18000 }
+          }
+          
+          // Effects
+          if (lowerText.match(/\b(add|more|some)\b.*\breverb\b|\breverb\b/)) {
+            fallbackSettings.reverbAmount = 0.4
+          }
+          
+          if (lowerText.match(/\b(add|more|some)\b.*\b(delay|echo)\b|\b(delay|echo)\b/)) {
+            fallbackSettings.delayAmount = 0.4
+          }
+          
+          // Crossfader
+          if (lowerText.match(/\b(fade|cross|switch|go)\b.*(to\s+)?(deck\s+)?b\b|\bb\b.*(fade|cross)/)) {
+            fallbackSettings.crossfader = 1
+          } else if (lowerText.match(/\b(fade|cross|switch|go)\b.*(to\s+)?(deck\s+)?a\b|\ba\b.*(fade|cross)/)) {
+            fallbackSettings.crossfader = 0
+          }
+          
+          if (fallbackAction) {
+            handleAction(fallbackAction)
+          }
+          
+          if (Object.keys(fallbackSettings).length > 0) {
+            onApplySettings(fallbackSettings)
           }
         }
 
@@ -215,7 +368,7 @@ export function VoiceControl({
         setIsLoading(false)
       }
     },
-    [audioSnapshot, trackA, trackB, musicObject, localMessages, handleAction, speakText],
+    [audioSnapshot, trackA, trackB, musicObject, localMessages, handleAction, speakText, onApplySettings, tracks],
   )
 
   const handleVoiceCommand = useCallback(
@@ -268,6 +421,11 @@ export function VoiceControl({
       }
     }
   }, [])
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [localMessages])
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -354,7 +512,7 @@ export function VoiceControl({
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 p-3">
+      <ScrollArea className="flex-1 p-3 h-full overflow-y-auto">
         <div className="space-y-3">
           {localMessages.length === 0 && (
             <div className="text-center py-8 text-slate-500 text-xs">
@@ -394,6 +552,8 @@ export function VoiceControl({
               {interimTranscript}...
             </div>
           )}
+          
+          <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
@@ -437,7 +597,7 @@ export function VoiceControl({
         </div>
 
         <div className="flex flex-wrap gap-1">
-          {["More bass", "Drop the filter", "Fade to B", "Add reverb", "What's playing?"].map((cmd) => (
+          {["More bass", "Drop filter", "Fade to B", "Play", "Add reverb"].map((cmd) => (
             <button
               key={cmd}
               onClick={() => sendMessage(cmd)}

@@ -226,7 +226,6 @@ export default function DJSystem() {
           <VisualizerControls
             musicObject={musicObject}
             onModeChange={(mode) => updateMusicObject({ visualizerMode: mode })}
-            onSensitivityChange={(value) => updateMusicObject({ visualSensitivity: value })}
             onColorSchemeChange={(scheme) => updateMusicObject({ colorScheme: scheme })}
           />
 
@@ -277,6 +276,8 @@ export default function DJSystem() {
                 getAnalyserData={getAnalyserData}
                 onApplySettings={handleApplyPreset}
                 onAction={handleVoiceAction}
+                onLoadTrack={handleLoadToDeck}
+                tracks={tracks}
               />
             </div>
           ) : showCopilot ? (

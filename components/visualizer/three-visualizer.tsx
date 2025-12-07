@@ -14,10 +14,19 @@ interface VisualizerProps {
   musicObject: MusicObject
 }
 
+// Color scheme definitions
+const colorSchemes = {
+  cyberpunk: { primary: "#8b5cf6", secondary: "#06b6d4", primaryRGB: [0.545, 0.361, 0.965], secondaryRGB: [0.024, 0.714, 0.831] },
+  neon: { primary: "#22c55e", secondary: "#eab308", primaryRGB: [0.133, 0.773, 0.369], secondaryRGB: [0.918, 0.702, 0.031] },
+  monochrome: { primary: "#ffffff", secondary: "#6b7280", primaryRGB: [1, 1, 1], secondaryRGB: [0.420, 0.447, 0.502] },
+  fire: { primary: "#f97316", secondary: "#ef4444", primaryRGB: [0.976, 0.451, 0.086], secondaryRGB: [0.937, 0.267, 0.267] },
+}
+
 const ParticleVisualizer = memo(function ParticleVisualizer({
   analyserData,
   sensitivity,
-}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number }) {
+  colorScheme,
+}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number; colorScheme: MusicObject["colorScheme"] }) {
   const pointsRef = useRef<THREE.Points>(null)
   const particleCount = 800
 
@@ -35,21 +44,32 @@ const ParticleVisualizer = memo(function ParticleVisualizer({
   }, [])
 
   const colors = useMemo(() => {
+    const scheme = colorSchemes[colorScheme]
     const cols = new Float32Array(particleCount * 3)
     for (let i = 0; i < particleCount; i++) {
       const t = i / particleCount
-      cols[i * 3] = 0.6 + t * 0.2
-      cols[i * 3 + 1] = 0.1 + t * 0.5
-      cols[i * 3 + 2] = 0.9
+      cols[i * 3] = scheme.primaryRGB[0] * (1 - t) + scheme.secondaryRGB[0] * t
+      cols[i * 3 + 1] = scheme.primaryRGB[1] * (1 - t) + scheme.secondaryRGB[1] * t
+      cols[i * 3 + 2] = scheme.primaryRGB[2] * (1 - t) + scheme.secondaryRGB[2] * t
     }
     return cols
-  }, [])
+  }, [colorScheme])
 
   const frameCount = useRef(0)
+  const prevColorScheme = useRef(colorScheme)
+  
   useFrame(({ clock }) => {
     frameCount.current++
     if (frameCount.current % 2 !== 0) return
     if (!pointsRef.current) return
+
+    // Update colors if scheme changed
+    if (prevColorScheme.current !== colorScheme) {
+      const colorAttr = pointsRef.current.geometry.attributes.color as THREE.BufferAttribute
+      colorAttr.array = colors
+      colorAttr.needsUpdate = true
+      prevColorScheme.current = colorScheme
+    }
 
     const positions = pointsRef.current.geometry.attributes.position.array as Float32Array
     const time = clock.getElapsedTime()
@@ -86,8 +106,10 @@ const ParticleVisualizer = memo(function ParticleVisualizer({
 const CymaticVisualizer = memo(function CymaticVisualizer({
   analyserData,
   sensitivity,
-}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number }) {
+  colorScheme,
+}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number; colorScheme: MusicObject["colorScheme"] }) {
   const meshRef = useRef<THREE.Mesh>(null)
+  const scheme = colorSchemes[colorScheme]
 
   const frameCount = useRef(0)
   useFrame(({ clock }) => {
@@ -118,8 +140,8 @@ const CymaticVisualizer = memo(function CymaticVisualizer({
     <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]}>
       <planeGeometry args={[10, 10, 32, 32]} />
       <meshStandardMaterial
-        color="#8b5cf6"
-        emissive="#4c1d95"
+        color={scheme.primary}
+        emissive={scheme.primary}
         emissiveIntensity={0.5}
         wireframe
         side={THREE.DoubleSide}
@@ -131,7 +153,9 @@ const CymaticVisualizer = memo(function CymaticVisualizer({
 const TunnelVisualizer = memo(function TunnelVisualizer({
   analyserData,
   sensitivity,
-}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number }) {
+  colorScheme,
+}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number; colorScheme: MusicObject["colorScheme"] }) {
+  const scheme = colorSchemes[colorScheme]
   const groupRef = useRef<THREE.Group>(null)
   const ringCount = 12
 
@@ -160,7 +184,7 @@ const TunnelVisualizer = memo(function TunnelVisualizer({
       {Array.from({ length: ringCount }).map((_, i) => (
         <mesh key={i} position={[0, 0, -i * 0.8]}>
           <torusGeometry args={[2 + i * 0.1, 0.02, 8, 32]} />
-          <meshBasicMaterial color={i % 2 === 0 ? "#8b5cf6" : "#06b6d4"} transparent opacity={0.6} />
+          <meshBasicMaterial color={i % 2 === 0 ? scheme.primary : scheme.secondary} transparent opacity={0.6} />
         </mesh>
       ))}
     </group>
@@ -170,7 +194,9 @@ const TunnelVisualizer = memo(function TunnelVisualizer({
 const WaveformVisualizer = memo(function WaveformVisualizer({
   analyserData,
   sensitivity,
-}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number }) {
+  colorScheme,
+}: { analyserData: VisualizerProps["analyserData"]; sensitivity: number; colorScheme: MusicObject["colorScheme"] }) {
+  const scheme = colorSchemes[colorScheme]
   const lineRef = useRef<THREE.Line>(null)
   const pointCount = 128
 
@@ -197,7 +223,7 @@ const WaveformVisualizer = memo(function WaveformVisualizer({
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" count={pointCount} array={positions} itemSize={3} />
       </bufferGeometry>
-      <lineBasicMaterial color="#06b6d4" linewidth={2} />
+      <lineBasicMaterial color={scheme.secondary} linewidth={2} />
     </line>
   )
 })
@@ -205,17 +231,19 @@ const WaveformVisualizer = memo(function WaveformVisualizer({
 const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps) {
   const sensitivity = musicObject.visualSensitivity ?? 1
   const mode = musicObject.visualizerMode ?? "particles"
+  const colorScheme = musicObject.colorScheme ?? "cyberpunk"
+  const scheme = colorSchemes[colorScheme]
 
   return (
     <>
       <ambientLight intensity={0.2} />
-      <pointLight position={[10, 10, 10]} intensity={1} color="#8b5cf6" />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} color="#06b6d4" />
+      <pointLight position={[10, 10, 10]} intensity={1} color={scheme.primary} />
+      <pointLight position={[-10, -10, -10]} intensity={0.5} color={scheme.secondary} />
 
-      {mode === "particles" && <ParticleVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
-      {mode === "cymatic" && <CymaticVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
-      {mode === "tunnel" && <TunnelVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
-      {mode === "waveform" && <WaveformVisualizer analyserData={analyserData} sensitivity={sensitivity} />}
+      {mode === "particles" && <ParticleVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
+      {mode === "cymatic" && <CymaticVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
+      {mode === "tunnel" && <TunnelVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
+      {mode === "waveform" && <WaveformVisualizer analyserData={analyserData} sensitivity={sensitivity} colorScheme={colorScheme} />}
     </>
   )
 })
