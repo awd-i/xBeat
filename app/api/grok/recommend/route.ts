@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       .join("\n")
 
     const { object: recommendations } = await generateObject({
-      model: xai("grok-3", { apiKey: process.env.XAI_API_KEY }),
+      model: xai("grok-3"),
       schema: recommendationSchema,
       prompt: `Recommend the next tracks to play after this current track:
 

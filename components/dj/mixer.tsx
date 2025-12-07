@@ -12,6 +12,7 @@ interface MixerProps {
   onFilterChange: (cutoff: number) => void
   onReverbChange: (value: number) => void
   onDelayChange: (value: number) => void
+  onMasterGainChange: (value: number) => void
   onIsolationChange?: (deck: "A" | "B", type: "bass" | "voice" | "melody", value: number) => void
   bpmA?: number | null
   bpmB?: number | null
@@ -24,6 +25,7 @@ export function Mixer({
   onFilterChange,
   onReverbChange,
   onDelayChange,
+  onMasterGainChange,
   onIsolationChange,
   bpmA,
   bpmB,
@@ -231,12 +233,12 @@ export function Mixer({
           <Label className="text-[10px] text-slate-400 uppercase tracking-wider">Master</Label>
           <span className="text-[10px] font-mono text-slate-500">{Math.round((musicObject.masterGain ?? 0.8) * 100)}%</span>
         </div>
-        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all"
-            style={{ width: `${(musicObject.masterGain ?? 0.8) * 100}%` }}
-          />
-        </div>
+        <Slider
+          value={[(musicObject.masterGain ?? 0.8) * 100]}
+          onValueChange={([v]) => onMasterGainChange(v / 100)}
+          max={100}
+          step={1}
+        />
       </div>
     </div>
   )

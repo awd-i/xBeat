@@ -74,10 +74,12 @@ export interface TransitionPlan {
   crossfadeAutomation: { t: number; value: number }[]
   deckAEqAutomation?: { t: number; low: number; mid: number; high: number }[]
   deckBEqAutomation?: { t: number; low: number; mid: number; high: number }[]
+  deckATempoAutomation?: { t: number; playbackRate: number }[]
+  deckBTempoAutomation?: { t: number; playbackRate: number }[]
   filterAutomation?: { t: number; cutoff: number; q: number }[]
   fxAutomation?: { t: number; reverb: number; delay: number }[]
   visualizerConfig?: Partial<MusicObject>
-  explanation: string
+  explanation?: string
 }
 
 export interface TrackAnalysis {
