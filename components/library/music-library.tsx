@@ -7,7 +7,6 @@ import type { Track } from "@/lib/types"
 import { useTracks } from "@/hooks/use-tracks"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Upload, Search, Music, Loader2, Sparkles, Trash2 } from "lucide-react"
 
 interface MusicLibraryProps {
@@ -111,7 +110,13 @@ export function MusicLibrary({ onLoadToDeck }: MusicLibraryProps) {
       </div>
 
       {/* Track List */}
-      <ScrollArea className="flex-1">
+      <div
+        className="flex-1 overflow-y-auto scrollbar-thin scrollbar-track-slate-800 scrollbar-thumb-purple-500/50 hover:scrollbar-thumb-purple-500/70"
+        style={{
+          scrollbarWidth: "thin",
+          scrollbarColor: "rgba(168, 85, 247, 0.5) rgba(30, 41, 59, 1)",
+        }}
+      >
         <div className="p-2 space-y-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -201,7 +206,7 @@ export function MusicLibrary({ onLoadToDeck }: MusicLibraryProps) {
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

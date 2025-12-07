@@ -1,6 +1,7 @@
 "use client"
 
 import useSWR from "swr"
+import { upload } from "@vercel/blob/client"
 import type { Track } from "@/lib/types"
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -13,22 +14,29 @@ export function useTracks() {
 
   const uploadTrack = async (file: File) => {
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-
-      const uploadResponse = await fetch("/api/tracks/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json()
-        throw new Error(errorData.error || "Upload failed")
+      const maxSize = 50 * 1024 * 1024 // 50MB
+      if (file.size > maxSize) {
+        throw new Error("File too large. Maximum size is 50MB.")
       }
 
-      const result = await uploadResponse.json()
+      console.log(`[v0] Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`)
+
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/tracks/upload",
+      })
+
+      console.log(`[v0] Upload complete: ${blob.url}`)
+
       await mutate()
-      return result.track as Track
+
+      // Return a track object (the actual track is registered server-side in onUploadCompleted)
+      return {
+        id: blob.pathname.split("/").pop() || file.name,
+        title: file.name.replace(/\.[^/.]+$/, ""),
+        artist: "Unknown Artist",
+        url: blob.url,
+      }
     } catch (err) {
       console.error("[v0] Upload error:", err)
       throw err

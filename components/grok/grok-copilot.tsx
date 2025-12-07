@@ -236,40 +236,22 @@ export function GrokCopilot({
 
             {lastTransitionPlan && (
               <div className="p-3 rounded-lg bg-slate-800/50 border border-purple-500/20">
-                <p className="text-xs text-slate-300 mb-2 whitespace-pre-wrap">{lastTransitionPlan.explanation}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-purple-300">Transition Plan</p>
+                  <span className="text-xs text-slate-400">{lastTransitionPlan.durationSeconds}s</span>
+                </div>
+                <p className="text-xs text-slate-300 mb-3">{lastTransitionPlan.explanation}</p>
                 <div className="flex gap-2">
                   <Button
                     size="sm"
                     onClick={() => {
-                      try {
-                        setIsApplyingTransition(true)
-                        onApplyTransition(lastTransitionPlan)
-                        addCoachMessage(
-                          `Transition applied! Duration: ${lastTransitionPlan.durationSeconds}s`,
-                          "action",
-                        )
-                        // Reset after a moment
-                        setTimeout(() => setIsApplyingTransition(false), 500)
-                      } catch (error) {
-                        console.error("Failed to apply transition:", error)
-                        addCoachMessage("Failed to apply transition. Please check console for details.", "tip")
-                        setIsApplyingTransition(false)
-                      }
+                      console.log("[v0] User clicked Apply Transition button")
+                      onApplyTransition(lastTransitionPlan)
                     }}
-                    disabled={isApplyingTransition}
                     className="flex-1 text-xs bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500"
                   >
-                    {isApplyingTransition ? (
-                      <>
-                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                        Applying...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-3 w-3 mr-1" />
-                        Apply
-                      </>
-                    )}
+                    <Zap className="h-3 w-3 mr-1" />
+                    Apply Transition
                   </Button>
                 </div>
               </div>

@@ -228,14 +228,63 @@ const Scene = memo(function Scene({ analyserData, musicObject }: VisualizerProps
 })
 
 export function ThreeVisualizer({ analyserData, musicObject }: VisualizerProps) {
+  const [isInteracting, setIsInteracting] = useState(false)
+
   return (
     <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-purple-950/20 to-slate-950">
-      <Canvas dpr={[1, 1.5]} performance={{ min: 0.5 }}>
+      <Canvas dpr={[1, 1.5]} performance={{ min: 0.5 }} style={{ touchAction: "none" }}>
         <PerspectiveCamera makeDefault position={[0, 3, 8]} />
-        <OrbitControls enableZoom={false} enablePan={false} autoRotate autoRotateSpeed={0.3} />
+        <OrbitControls
+          enableZoom={true}
+          enablePan={true}
+          enableRotate={true}
+          autoRotate={false}
+          minDistance={2}
+          maxDistance={50}
+          minPolarAngle={0}
+          maxPolarAngle={Math.PI}
+          enableDamping={true}
+          dampingFactor={0.05}
+          rotateSpeed={1.0}
+          zoomSpeed={1.2}
+          panSpeed={0.8}
+          mouseButtons={{
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+          }}
+          touches={{
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+          }}
+          onStart={() => setIsInteracting(true)}
+          onEnd={() => setIsInteracting(false)}
+        />
         <Scene analyserData={analyserData} musicObject={musicObject} />
-        <fog attach="fog" args={["#0f0f23", 5, 20]} />
+        <Grid
+          position={[0, -3, 0]}
+          args={[50, 50]}
+          cellSize={1}
+          cellThickness={0.5}
+          cellColor="#1e1b4b"
+          sectionSize={5}
+          sectionThickness={1}
+          sectionColor="#4c1d95"
+          fadeDistance={40}
+          fadeStrength={1}
+          followCamera={false}
+          infiniteGrid={true}
+        />
+        <Stars radius={100} depth={50} count={1000} factor={4} saturation={0} fade speed={1} />
+        <fog attach="fog" args={["#0f0f23", 10, 60]} />
       </Canvas>
+      {!isInteracting && (
+        <div className="absolute bottom-4 left-4 text-xs text-white/40 pointer-events-none space-y-1">
+          <p>Drag to rotate</p>
+          <p>Scroll to zoom</p>
+          <p>Right-drag to pan</p>
+        </div>
+      )}
     </div>
   )
 }

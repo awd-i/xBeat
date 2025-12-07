@@ -27,6 +27,9 @@ export interface TrackSettings {
   pan: number
   playbackRate: number
   enabled: boolean
+  bassIsolation?: number
+  voiceIsolation?: number
+  melodyIsolation?: number
 }
 
 export interface EQSettings {

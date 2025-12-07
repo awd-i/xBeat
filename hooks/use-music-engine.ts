@@ -136,6 +136,7 @@ export function useMusicEngine() {
     durationB,
     musicObject,
     analyserData,
-    getAnalyserData, // Expose getAnalyserData
+    getAnalyserData,
+    musicEngine: engineRef.current, // Expose the music engine instance
   }
 }
