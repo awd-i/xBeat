@@ -70,7 +70,10 @@ export interface MusicObject {
 }
 
 export interface TransitionPlan {
+  startDelay?: number
   durationSeconds: number
+  technique?: "bass_swap" | "eq_blend" | "filter_sweep" | "echo_out" | "quick_cut" | "long_blend" | "energy_drop" | "build_up"
+  phaseAlignment?: "phrase_start" | "drop" | "breakdown" | "buildup" | "outro"
   crossfadeAutomation: { t: number; value: number }[]
   deckAEqAutomation?: { t: number; low: number; mid: number; high: number }[]
   deckBEqAutomation?: { t: number; low: number; mid: number; high: number }[]
