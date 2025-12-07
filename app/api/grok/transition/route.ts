@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "XAI API key not configured" }, { status: 500 })
     }
 
-    const { object: plan } = await generateObject({
+    const { object: planData } = await generateObject({
       model: xai("grok-3"),
       schema: transitionPlanSchema,
       prompt: `Create a professional DJ transition plan between these two tracks:
@@ -106,6 +106,17 @@ ${userPrompt ? `User request: ${userPrompt}` : "Create a smooth, professional tr
 Generate a transition plan with automation curves for crossfader, EQ, and effects. The transition should maintain energy and musical flow.`,
       system: `You are an expert DJ transition planner. Create professional, musically coherent transitions. Consider BPM matching, key compatibility, energy flow, and genre blending. Provide detailed automation curves and a helpful explanation of your strategy.`,
     })
+
+    // Convert the plan to match TransitionPlan interface
+    const { visualizerMode, ...planWithoutMode } = planData
+    const plan = {
+      ...planWithoutMode,
+      visualizerConfig: visualizerMode
+        ? ({
+            visualizerMode,
+          } as Partial<MusicObject>)
+        : undefined,
+    }
 
     return NextResponse.json({
       plan,

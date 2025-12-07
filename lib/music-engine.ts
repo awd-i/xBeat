@@ -359,13 +359,52 @@ export class MusicEngine {
     }
   }
 
+  private interpolateEQAutomation(
+    points: { t: number; low: number; mid: number; high: number }[],
+    progress: number,
+  ): { low: number; mid: number; high: number } {
+    if (points.length === 0) return { low: 0, mid: 0, high: 0 }
+    if (points.length === 1) return points[0]
+
+    // Find surrounding points
+    let before = points[0]
+    let after = points[points.length - 1]
+
+    for (let i = 0; i < points.length - 1; i++) {
+      if (points[i].t <= progress && points[i + 1].t >= progress) {
+        before = points[i]
+        after = points[i + 1]
+        break
+      }
+    }
+
+    if (before.t === after.t) return before
+
+    // Linear interpolation for each EQ band
+    const ratio = (progress - before.t) / (after.t - before.t)
+    return {
+      low: before.low + (after.low - before.low) * ratio,
+      mid: before.mid + (after.mid - before.mid) * ratio,
+      high: before.high + (after.high - before.high) * ratio,
+    }
+  }
+
   applyTransitionPlan(plan: TransitionPlan): void {
+    if (!this.audioContext) {
+      console.error("Cannot apply transition plan: audio context not initialized")
+      return
+    }
+
+    // Clear any existing transition
     if (this.transitionInterval) {
       clearInterval(this.transitionInterval)
+      this.transitionInterval = null
     }
 
     const startTime = Date.now()
     const duration = plan.durationSeconds * 1000
+
+    console.log(`[TRANSITION] Starting transition plan: ${plan.durationSeconds}s`)
 
     this.transitionInterval = setInterval(() => {
       const elapsed = Date.now() - startTime
@@ -374,6 +413,22 @@ export class MusicEngine {
       // Interpolate crossfade
       const crossfadeValue = this.interpolateAutomation(plan.crossfadeAutomation, progress)
       this.setCrossfade(crossfadeValue)
+
+      // Interpolate Deck A EQ if present
+      if (plan.deckAEqAutomation?.length && this.deckA.eqLow && this.deckA.eqMid && this.deckA.eqHigh) {
+        const eq = this.interpolateEQAutomation(plan.deckAEqAutomation, progress)
+        this.deckA.eqLow.gain.value = eq.low
+        this.deckA.eqMid.gain.value = eq.mid
+        this.deckA.eqHigh.gain.value = eq.high
+      }
+
+      // Interpolate Deck B EQ if present
+      if (plan.deckBEqAutomation?.length && this.deckB.eqLow && this.deckB.eqMid && this.deckB.eqHigh) {
+        const eq = this.interpolateEQAutomation(plan.deckBEqAutomation, progress)
+        this.deckB.eqLow.gain.value = eq.low
+        this.deckB.eqMid.gain.value = eq.mid
+        this.deckB.eqHigh.gain.value = eq.high
+      }
 
       // Interpolate filter if present
       if (plan.filterAutomation?.length) {
@@ -404,6 +459,7 @@ export class MusicEngine {
       }
 
       if (progress >= 1) {
+        console.log(`[TRANSITION] Transition plan completed`)
         clearInterval(this.transitionInterval!)
         this.transitionInterval = null
       }

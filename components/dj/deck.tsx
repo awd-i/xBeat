@@ -162,46 +162,58 @@ export function Deck({
       </div>
 
       {/* Waveform / Progress */}
-      <div
-        className="relative h-12 bg-slate-800/50 rounded-lg overflow-hidden cursor-pointer group"
-        onClick={(e) => {
-          if (!track || !duration) return
-          const rect = e.currentTarget.getBoundingClientRect()
-          const x = e.clientX - rect.left
-          const percent = x / rect.width
-          onSeek(percent * duration)
-        }}
-      >
-        {/* Progress Bar */}
+      <div className="flex flex-col gap-1">
+        {/* Waveform container */}
         <div
-          className={cn(
-            "absolute inset-y-0 left-0 transition-all",
-            deck === "A" ? "bg-purple-500/30" : "bg-cyan-500/30",
-          )}
-          style={{ width: `${progress}%` }}
-        />
+          className="relative h-8 bg-slate-800/50 rounded-lg overflow-hidden cursor-pointer"
+          onClick={(e) => {
+            if (!track || !duration) return
+            const rect = e.currentTarget.getBoundingClientRect()
+            const x = e.clientX - rect.left
+            const percent = x / rect.width
+            onSeek(percent * duration)
+          }}
+        >
+          {/* Progress Bar (highlighted portion) */}
+          <div
+            className={cn(
+              "absolute inset-y-0 left-0",
+              deck === "A" ? "bg-purple-500/30" : "bg-cyan-500/30",
+            )}
+            style={{ width: `${Math.min(Math.max(progress, 0), 100)}%` }}
+          />
 
-        {/* Playhead */}
-        <div
-          className={cn("absolute top-0 bottom-0 w-0.5", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
-          style={{ left: `${progress}%` }}
-        />
+          {/* Waveform visualization */}
+          <div className="absolute inset-0 flex items-center justify-between">
+            {waveformHeights.map((height, i) => {
+              const barProgress = ((i + 0.5) / waveformHeights.length) * 100
+              const isPast = barProgress < progress
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex-1 mx-px rounded-full",
+                    deck === "A" ? "bg-purple-400" : "bg-cyan-400",
+                    isPast ? "opacity-70" : "opacity-30"
+                  )}
+                  style={{ height }}
+                />
+              )
+            })}
+          </div>
 
-        {/* Fake waveform visualization */}
-        <div className="absolute inset-0 flex items-center justify-center gap-px opacity-50">
-          {waveformHeights.map((height, i) => (
-            <div
-              key={i}
-              className={cn("w-1 rounded-full", deck === "A" ? "bg-purple-400" : "bg-cyan-400")}
-              style={{
-                height,
-              }}
-            />
-          ))}
+          {/* Playhead */}
+          <div
+            className={cn(
+              "absolute top-0 bottom-0 w-0.5",
+              deck === "A" ? "bg-purple-400" : "bg-cyan-400"
+            )}
+            style={{ left: `${Math.min(Math.max(progress, 0), 100)}%` }}
+          />
         </div>
 
-        {/* Time display */}
-        <div className="absolute bottom-1 left-2 right-2 flex justify-between text-[10px] font-mono text-slate-400">
+        {/* Time display - separate row */}
+        <div className="flex justify-between text-[10px] font-mono text-slate-400 px-1">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>

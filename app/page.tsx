@@ -83,10 +83,19 @@ export default function DJSystem() {
 
   const handleApplyTransition = useCallback(
     (plan: TransitionPlan) => {
-      applyTransitionPlan(plan)
+      try {
+        console.log("[TRANSITION] Applying transition plan:", plan)
+        
+        // Apply the transition plan automation
+        applyTransitionPlan(plan)
 
-      if (plan.visualizerConfig) {
-        updateMusicObject(plan.visualizerConfig)
+        // Update visualizer config if provided
+        if (plan.visualizerConfig) {
+          updateMusicObject(plan.visualizerConfig)
+        }
+      } catch (error) {
+        console.error("[TRANSITION] Error applying transition plan:", error)
+        throw error
       }
     },
     [applyTransitionPlan, updateMusicObject],

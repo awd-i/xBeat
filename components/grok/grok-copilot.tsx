@@ -44,6 +44,7 @@ export function GrokCopilot({
   const [presets, setPresets] = useState<Preset[]>([])
   const [coachMessages, setCoachMessages] = useState<CoachMessage[]>([])
   const [lastTransitionPlan, setLastTransitionPlan] = useState<TransitionPlan | null>(null)
+  const [isApplyingTransition, setIsApplyingTransition] = useState(false)
 
   const addCoachMessage = (message: string, type: "info" | "tip" | "action" = "info") => {
     setCoachMessages((prev) =>
@@ -235,11 +236,40 @@ export function GrokCopilot({
 
             {lastTransitionPlan && (
               <div className="p-3 rounded-lg bg-slate-800/50 border border-purple-500/20">
-                <p className="text-xs text-slate-300 mb-2">{lastTransitionPlan.explanation}</p>
+                <p className="text-xs text-slate-300 mb-2 whitespace-pre-wrap">{lastTransitionPlan.explanation}</p>
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={() => onApplyTransition(lastTransitionPlan)} className="flex-1 text-xs">
-                    <Zap className="h-3 w-3 mr-1" />
-                    Apply
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        setIsApplyingTransition(true)
+                        onApplyTransition(lastTransitionPlan)
+                        addCoachMessage(
+                          `Transition applied! Duration: ${lastTransitionPlan.durationSeconds}s`,
+                          "action",
+                        )
+                        // Reset after a moment
+                        setTimeout(() => setIsApplyingTransition(false), 500)
+                      } catch (error) {
+                        console.error("Failed to apply transition:", error)
+                        addCoachMessage("Failed to apply transition. Please check console for details.", "tip")
+                        setIsApplyingTransition(false)
+                      }
+                    }}
+                    disabled={isApplyingTransition}
+                    className="flex-1 text-xs bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-500 hover:to-cyan-500"
+                  >
+                    {isApplyingTransition ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Applying...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-3 w-3 mr-1" />
+                        Apply
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
