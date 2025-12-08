@@ -132,17 +132,47 @@ export function VoiceControl({
           }
           break
         case "loadTrack":
-          if (parsed.deck && (parsed.deck === "A" || parsed.deck === "B")) {
-            // Find track by ID or partial title match
-            const track = tracks.find(t => 
-              t.id === parsed.trackId || 
-              (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase()))
-            )
-            if (track) {
-              onLoadTrack(track, parsed.deck)
-              // Auto-play after loading
-              setTimeout(() => onAction("play", { deck: parsed.deck }), 500)
+          // Find track by ID or partial title match
+          const track = tracks.find(t => 
+            t.id === parsed.trackId || 
+            (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase()))
+          )
+          if (track) {
+            // Intelligently choose which deck to load to
+            let targetDeck: "A" | "B"
+            
+            if (parsed.deck && (parsed.deck === "A" || parsed.deck === "B")) {
+              // Use specified deck
+              targetDeck = parsed.deck
+            } else {
+              // Auto-choose deck: prefer empty deck, then non-playing deck, then deck A
+              if (!trackA) {
+                targetDeck = "A"
+              } else if (!trackB) {
+                targetDeck = "B"
+              } else {
+                // Both decks have tracks - load to the one that isn't playing
+                // Or if both/neither playing, alternate based on current crossfader position
+                const isAPlaying = musicObject.tracks.A?.enabled !== false
+                const isBPlaying = musicObject.tracks.B?.enabled !== false
+                
+                if (isAPlaying && !isBPlaying) {
+                  targetDeck = "B"
+                } else if (!isAPlaying && isBPlaying) {
+                  targetDeck = "A"
+                } else {
+                  // Both or neither playing - use crossfader position to decide
+                  targetDeck = musicObject.crossfader < 0.5 ? "B" : "A"
+                }
+              }
             }
+            
+            console.log(`[VoiceControl] Loading "${track.title}" to deck ${targetDeck}`)
+            onLoadTrack(track, targetDeck)
+            // Auto-play after loading
+            setTimeout(() => onAction("play", { deck: targetDeck }), 500)
+          } else {
+            console.warn("[VoiceControl] Track not found:", parsed.trackId || parsed.trackTitle)
           }
           break
         case "play":
@@ -290,17 +320,41 @@ export function VoiceControl({
           let fallbackSettings: any = {}
           let fallbackAction: ParsedAction | null = null
           
-          // Track loading
-          const loadMatch = lowerText.match(/load.*?(deck\s+)?(a|b)/i)
-          if (loadMatch && tracks.length > 0) {
-            const deck = loadMatch[2].toUpperCase() as "A" | "B"
-            // Try to find a track by name in the text
-            const trackMatch = tracks.find(t => lowerText.includes(t.title.toLowerCase().slice(0, 10)))
+          // Track loading/playing - check for "play [song name]" or "load [song name]"
+          const playTrackMatch = lowerText.match(/(?:play|load|put on)\s+["']?([^"'\n]+?)["']?(?:\s+(?:on|to|in)\s+deck\s+(a|b))?$/i)
+          if (playTrackMatch && tracks.length > 0) {
+            const songQuery = playTrackMatch[1].trim()
+            const specifiedDeck = playTrackMatch[2]?.toUpperCase() as "A" | "B" | undefined
+            
+            // Try to find a track by partial name match
+            const trackMatch = tracks.find(t => 
+              t.title.toLowerCase().includes(songQuery) ||
+              songQuery.includes(t.title.toLowerCase())
+            )
+            
             if (trackMatch) {
-              fallbackAction = { action: "loadTrack", trackId: trackMatch.id, deck }
-            } else {
-              // Load first available track if no specific track mentioned
-              fallbackAction = { action: "loadTrack", trackId: tracks[0].id, deck }
+              console.log(`[VoiceControl] Fallback: Loading "${trackMatch.title}"`)
+              fallbackAction = { 
+                action: "loadTrack", 
+                trackId: trackMatch.id,
+                trackTitle: trackMatch.title,
+                deck: specifiedDeck 
+              }
+            } else if (songQuery.length > 2) {
+              // Try fuzzy match - find track where any word matches
+              const words = songQuery.split(/\s+/)
+              const fuzzyMatch = tracks.find(t => 
+                words.some(word => word.length > 2 && t.title.toLowerCase().includes(word))
+              )
+              if (fuzzyMatch) {
+                console.log(`[VoiceControl] Fallback fuzzy: Loading "${fuzzyMatch.title}"`)
+                fallbackAction = { 
+                  action: "loadTrack", 
+                  trackId: fuzzyMatch.id,
+                  trackTitle: fuzzyMatch.title,
+                  deck: specifiedDeck 
+                }
+              }
             }
           }
           

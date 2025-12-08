@@ -44,12 +44,12 @@ Current Audio State:
     // Available tracks
     let libraryContext = ""
     if (availableTracks && availableTracks.length > 0) {
-      libraryContext = `\nLibrary (${availableTracks.length} tracks):\n` + 
-        availableTracks.slice(0, 10).map((t: any) => 
-          `- "${t.title}" [ID: ${t.id}] (${t.bpm || '?'}BPM, ${t.key || '?'})`
+      libraryContext = `\n\nMusic Library (${availableTracks.length} tracks available):\n` + 
+        availableTracks.slice(0, 15).map((t: any) => 
+          `- "${t.title}" by ${t.artist || 'Unknown'} [ID: ${t.id}] (${t.bpm || '?'}BPM, ${t.key || '?'})`
         ).join('\n')
-      if (availableTracks.length > 10) {
-        libraryContext += `\n... and ${availableTracks.length - 10} more`
+      if (availableTracks.length > 15) {
+        libraryContext += `\n... and ${availableTracks.length - 15} more tracks`
       }
     }
 
@@ -77,14 +77,18 @@ Respond format: One sentence + JSON block.
 
 Actions:
 - mixer: Change settings
-- loadTrack: Load track by ID to deck A or B
+- loadTrack: Load track by ID or title to deck A or B (automatically starts playing)
+  Format: {"action":"loadTrack","trackId":"exact-id"} OR {"action":"loadTrack","trackTitle":"partial name"}
 - play/pause: Control playback
-- transition: Create a smooth transition from deck A to deck B
+- transition: Create a smooth automated DJ transition with crossfading and effects
+  Format: {"action":"transition","type":"smooth"} OR {"action":"transition","trackTitle":"[name]"} to load & transition
 
 Examples:
 "Bass" → "Bass +4dB. \`\`\`json\n{"action":"mixer","settings":{"eq":{"low":4}}}\n\`\`\`"
 
 "Load [track] to A" → "Loading. \`\`\`json\n{"action":"loadTrack","trackId":"[ID]","deck":"A"}\n\`\`\`"
+
+"Play Summer Vibes" → "Playing Summer Vibes. \`\`\`json\n{"action":"loadTrack","trackTitle":"Summer Vibes"}\n\`\`\`"
 
 "Play" → "Playing. \`\`\`json\n{"action":"play"}\n\`\`\`"
 
@@ -92,12 +96,20 @@ Examples:
 
 "Transition to B" → "Creating transition. \`\`\`json\n{"action":"transition","type":"smooth"}\n\`\`\`"
 
-"Mix into deck B" → "Transitioning. \`\`\`json\n{"action":"transition","type":"smooth"}\n\`\`\`"
+"Transition to Fire" → "Transitioning to Fire! \`\`\`json\n{"action":"transition","trackTitle":"Fire"}\n\`\`\`"
+
+"Mix into Summer Vibes" → "Mixing into Summer Vibes! \`\`\`json\n{"action":"transition","trackTitle":"Summer Vibes"}\n\`\`\`"
 
 ${trackContext}${libraryContext}
 ${mixerContext}
 
-IMPORTANT: When user asks to "transition", "mix", "blend", or "go to" deck B, use the "transition" action to create a smooth automated crossfade from A to B.
+CRITICAL RULES:
+1. When user says "transition to [track name]", "mix into [track]", "blend to [track]" - use "transition" action with trackTitle
+2. When user says "play [track]" or "load [track]" - use "loadTrack" action
+3. "transition" action = professional DJ crossfade with automation. "loadTrack" = just load and play
+4. If a track needs to be loaded for a transition, include trackTitle in the transition action
+5. For "loadTrack", you can omit "deck" field - system auto-chooses the best deck
+6. Use "trackTitle" with partial/fuzzy matching (e.g., "Fire" matches "Alan Walker - Fire!")
 `
 
     const messages = [...(conversationHistory || []).slice(-10), { role: "user" as const, content: command }]

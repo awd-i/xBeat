@@ -143,33 +143,86 @@ export function GrokChatPanel({
           if (parsed.transitionPlan) {
             onApplyTransition(parsed.transitionPlan)
           } else {
-            // Request a transition plan from the API
-            if (trackA && trackB) {
-              try {
-                console.log("[GrokChat] Requesting transition from A to B")
-                const response = await fetch("/api/grok/transition", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    trackA,
-                    trackB,
-                    currentMusicObject: musicObject,
-                    userPrompt: parsed.transitionType || "smooth transition",
-                  }),
-                })
+            // Check if we need to load a track first
+            if (parsed.trackTitle || parsed.trackId) {
+              // Find the track to transition to
+              const track = tracks.find(
+                (t) =>
+                  t.id === parsed.trackId ||
+                  (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase())),
+              )
+              
+              if (track) {
+                console.log(`[GrokChat] Loading "${track.title}" for transition`)
+                
+                // Determine which deck to load to (opposite of the currently playing one)
+                const targetDeck: "A" | "B" = trackA && !trackB ? "B" : !trackA && trackB ? "A" : musicObject.crossfader < 0.5 ? "B" : "A"
+                
+                // Load the track WITHOUT auto-playing (transition handler will start it)
+                onLoadTrack(track, targetDeck)
+                // Note: We don't call play() here - the transition handler will start it with proper crossfader position
+                
+                // Wait for track to load, then request transition
+                setTimeout(async () => {
+                  const currentTrackA = targetDeck === "A" ? track : trackA
+                  const currentTrackB = targetDeck === "B" ? track : trackB
+                  
+                  if (currentTrackA && currentTrackB) {
+                    try {
+                      console.log("[GrokChat] Requesting transition after loading track")
+                      const response = await fetch("/api/grok/transition", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          trackA: currentTrackA,
+                          trackB: currentTrackB,
+                          currentMusicObject: musicObject,
+                          userPrompt: parsed.transitionType || "smooth transition",
+                        }),
+                      })
 
-                if (response.ok) {
-                  const { plan } = await response.json()
-                  console.log("[GrokChat] Received transition plan:", plan)
-                  onApplyTransition(plan)
-                } else {
-                  console.error("[GrokChat] Failed to get transition plan")
-                }
-              } catch (error) {
-                console.error("[GrokChat] Error requesting transition:", error)
+                      if (response.ok) {
+                        const { plan } = await response.json()
+                        console.log("[GrokChat] Received transition plan:", plan)
+                        onApplyTransition(plan)
+                      }
+                    } catch (error) {
+                      console.error("[GrokChat] Error requesting transition:", error)
+                    }
+                  }
+                }, 1000) // Wait 1 second for track to load
+              } else {
+                console.warn("[GrokChat] Track not found for transition:", parsed.trackTitle || parsed.trackId)
               }
             } else {
-              console.warn("[GrokChat] Cannot transition - missing tracks")
+              // Normal transition between currently loaded tracks
+              if (trackA && trackB) {
+                try {
+                  console.log("[GrokChat] Requesting transition from A to B")
+                  const response = await fetch("/api/grok/transition", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      trackA,
+                      trackB,
+                      currentMusicObject: musicObject,
+                      userPrompt: parsed.transitionType || "smooth transition",
+                    }),
+                  })
+
+                  if (response.ok) {
+                    const { plan } = await response.json()
+                    console.log("[GrokChat] Received transition plan:", plan)
+                    onApplyTransition(plan)
+                  } else {
+                    console.error("[GrokChat] Failed to get transition plan")
+                  }
+                } catch (error) {
+                  console.error("[GrokChat] Error requesting transition:", error)
+                }
+              } else {
+                console.warn("[GrokChat] Cannot transition - missing tracks")
+              }
             }
           }
           break
@@ -179,16 +232,47 @@ export function GrokChatPanel({
           }
           break
         case "loadTrack":
-          if (parsed.deck && (parsed.deck === "A" || parsed.deck === "B")) {
-            const track = tracks.find(
-              (t) =>
-                t.id === parsed.trackId ||
-                (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase())),
-            )
-            if (track) {
-              onLoadTrack(track, parsed.deck)
-              setTimeout(() => onAction("play", { deck: parsed.deck }), 500)
+          const track = tracks.find(
+            (t) =>
+              t.id === parsed.trackId ||
+              (parsed.trackTitle && t.title.toLowerCase().includes(parsed.trackTitle.toLowerCase())),
+          )
+          if (track) {
+            // Intelligently choose which deck to load to
+            let targetDeck: "A" | "B"
+            
+            if (parsed.deck && (parsed.deck === "A" || parsed.deck === "B")) {
+              // Use specified deck
+              targetDeck = parsed.deck
+            } else {
+              // Auto-choose deck: prefer empty deck, then non-playing deck, then deck A
+              if (!trackA) {
+                targetDeck = "A"
+              } else if (!trackB) {
+                targetDeck = "B"
+              } else {
+                // Both decks have tracks - load to the one that isn't playing
+                // Or if both/neither playing, alternate based on current crossfader position
+                const isAPlaying = musicObject.tracks.A?.enabled !== false
+                const isBPlaying = musicObject.tracks.B?.enabled !== false
+                
+                if (isAPlaying && !isBPlaying) {
+                  targetDeck = "B"
+                } else if (!isAPlaying && isBPlaying) {
+                  targetDeck = "A"
+                } else {
+                  // Both or neither playing - use crossfader position to decide
+                  targetDeck = musicObject.crossfader < 0.5 ? "B" : "A"
+                }
+              }
             }
+            
+            console.log(`[GrokChat] Loading "${track.title}" to deck ${targetDeck}`)
+            onLoadTrack(track, targetDeck)
+            // Auto-play after loading (give time for track to load)
+            setTimeout(() => onAction("play", { deck: targetDeck }), 500)
+          } else {
+            console.warn("[GrokChat] Track not found:", parsed.trackId || parsed.trackTitle)
           }
           break
         case "play":

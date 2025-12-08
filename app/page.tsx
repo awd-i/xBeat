@@ -94,6 +94,7 @@ export default function DJSystem() {
   const handleApplyTransition = useCallback(
     (plan: TransitionPlan) => {
       console.log("[v0] Applying transition plan:", plan)
+      console.log(`[v0] Current state: A playing=${isPlayingA}, B playing=${isPlayingB}, A loaded=${!!trackA}, B loaded=${!!trackB}`)
 
       // Determine which deck is the outgoing (currently playing) track
       let outgoingDeck: "A" | "B" = "A"
@@ -101,58 +102,88 @@ export default function DJSystem() {
       
       if (isPlayingB && !isPlayingA) {
         // B is playing, A is not - B is outgoing, A is incoming
+        console.log("[v0] B is playing, A is not - B is outgoing")
         outgoingDeck = "B"
         incomingDeck = "A"
       } else if (!isPlayingA && !isPlayingB) {
-        // Neither playing - start A as outgoing if it has a track
+        // Neither playing - start the one that has a track
         if (trackA) {
-          console.log("[v0] Starting deck A as outgoing track")
+          console.log("[v0] Neither playing, starting deck A as outgoing")
           play("A")
           outgoingDeck = "A"
           incomingDeck = "B"
         } else if (trackB) {
-          console.log("[v0] Starting deck B as outgoing track")
+          console.log("[v0] Neither playing, starting deck B as outgoing")
           play("B")
           outgoingDeck = "B"
           incomingDeck = "A"
         }
+      } else {
+        // A is playing (or both are playing), A is outgoing by default
+        console.log("[v0] A is playing - A is outgoing, B is incoming")
+        outgoingDeck = "A"
+        incomingDeck = "B"
       }
-      // If A is playing (or both are playing), A is outgoing by default
 
-      // Set crossfader to the outgoing deck's side
+      // CRITICAL: Set crossfader to FULLY on the outgoing deck BEFORE starting incoming
+      // This prevents both tracks playing at full volume
       const initialCrossfader = outgoingDeck === "A" ? 0 : 1
-      console.log(`[v0] Setting crossfader to ${outgoingDeck} side (${initialCrossfader})`)
+      const targetCrossfader = outgoingDeck === "A" ? 1 : 0
+      
+      console.log(`[v0] Setting crossfader to ${outgoingDeck} side (${initialCrossfader}) before transition`)
       setCrossfade(initialCrossfader)
-
-      // Start the incoming deck if not playing
-      const incomingTrack = incomingDeck === "A" ? trackA : trackB
-      const incomingPlaying = incomingDeck === "A" ? isPlayingA : isPlayingB
       
-      if (!incomingPlaying && incomingTrack) {
-        console.log(`[v0] Starting deck ${incomingDeck} as incoming track`)
-        play(incomingDeck)
-      }
+      // Force update the music object to ensure crossfader is applied
+      updateMusicObject({ crossfader: initialCrossfader })
 
-      // Handle start delay for timing/phrasing
-      const startDelay = (plan.startDelay || 0) * 1000 // Convert to milliseconds
-      
-      if (startDelay > 0) {
-        console.log(`[v0] Waiting ${plan.startDelay}s for optimal timing (${plan.phaseAlignment || 'phrase alignment'})...`)
-      }
-
+      // Wait a moment for crossfader to take effect, then start the incoming deck
       setTimeout(() => {
-        // Apply the transition automation
-        console.log(`[v0] Executing ${plan.technique || 'standard'} transition: ${outgoingDeck} → ${incomingDeck}`)
-        applyTransitionPlan(plan)
-
-        // Apply visualizer config if present
-        if (plan.visualizerConfig) {
-          console.log("[v0] Applying visualizer config:", plan.visualizerConfig)
-          updateMusicObject(plan.visualizerConfig)
+        const incomingTrack = incomingDeck === "A" ? trackA : trackB
+        const incomingPlaying = incomingDeck === "A" ? isPlayingA : isPlayingB
+        
+        console.log(`[v0] Checking incoming deck ${incomingDeck}: track=${!!incomingTrack}, playing=${incomingPlaying}`)
+        
+        if (!incomingPlaying && incomingTrack) {
+          console.log(`[v0] Starting deck ${incomingDeck} as incoming track (will be silent due to crossfader)`)
+          play(incomingDeck)
+        } else if (incomingPlaying) {
+          console.log(`[v0] Deck ${incomingDeck} is already playing`)
+        } else {
+          console.warn(`[v0] No track loaded on incoming deck ${incomingDeck}!`)
         }
 
-        console.log("[v0] Transition started, duration:", plan.durationSeconds, "seconds")
-      }, startDelay)
+        // Handle start delay for timing/phrasing
+        const startDelay = (plan.startDelay || 0) * 1000 // Convert to milliseconds
+        
+        if (startDelay > 0) {
+          console.log(`[v0] Waiting ${plan.startDelay}s for optimal timing (${plan.phaseAlignment || 'phrase alignment'})...`)
+        }
+
+        setTimeout(() => {
+          // Adjust the transition plan if we're transitioning from B to A (reverse direction)
+          const adjustedPlan = { ...plan }
+          if (outgoingDeck === "B") {
+            // Reverse the crossfade automation (flip all values)
+            console.log("[v0] Reversing crossfade automation for B→A transition")
+            adjustedPlan.crossfadeAutomation = plan.crossfadeAutomation.map(point => ({
+              t: point.t,
+              value: 1 - point.value, // Flip: 0→1 becomes 1→0
+            }))
+          }
+
+          // Apply the transition automation
+          console.log(`[v0] Executing ${plan.technique || 'standard'} transition: ${outgoingDeck} → ${incomingDeck}`)
+          applyTransitionPlan(adjustedPlan)
+
+          // Apply visualizer config if present
+          if (plan.visualizerConfig) {
+            console.log("[v0] Applying visualizer config:", plan.visualizerConfig)
+            updateMusicObject(plan.visualizerConfig)
+          }
+
+          console.log("[v0] Transition started, duration:", plan.durationSeconds, "seconds")
+        }, startDelay)
+      }, 100) // 100ms delay to ensure crossfader is applied before starting incoming deck
     },
     [applyTransitionPlan, updateMusicObject, isPlayingA, isPlayingB, trackA, trackB, play, setCrossfade],
   )
@@ -198,18 +229,35 @@ export default function DJSystem() {
           break
         case "transition":
           if (params?.type === "smooth") {
-            const start = musicObject.crossfader
-            const end = start < 0.5 ? 1 : 0
-            let progress = 0
-            const interval = setInterval(() => {
-              progress += 0.02
-              if (progress >= 1) {
-                clearInterval(interval)
-                setCrossfade(end)
-              } else {
-                setCrossfade(start + (end - start) * progress)
-              }
-            }, 50)
+            // Ensure both decks are playing before starting transition
+            const targetDeck = musicObject.crossfader < 0.5 ? "B" : "A"
+            const targetIsPlaying = targetDeck === "A" ? isPlayingA : isPlayingB
+            const targetTrack = targetDeck === "A" ? trackA : trackB
+            
+            if (!targetIsPlaying && targetTrack) {
+              console.log(`[v0] Starting deck ${targetDeck} before simple transition`)
+              play(targetDeck)
+            }
+            
+            // Wait a moment for deck to start if needed, then begin crossfade
+            setTimeout(() => {
+              const start = musicObject.crossfader
+              const end = start < 0.5 ? 1 : 0
+              console.log(`[v0] Simple transition: crossfading from ${start.toFixed(2)} to ${end.toFixed(2)}`)
+              
+              let progress = 0
+              const interval = setInterval(() => {
+                progress += 0.01 // Slower for smoother transition (100 steps over 5 seconds)
+                if (progress >= 1) {
+                  clearInterval(interval)
+                  setCrossfade(end)
+                  console.log(`[v0] Simple transition complete, crossfader at ${end}`)
+                } else {
+                  const currentValue = start + (end - start) * progress
+                  setCrossfade(currentValue)
+                }
+              }, 50)
+            }, targetIsPlaying ? 0 : 100) // Wait 100ms if we just started the target deck
           }
           break
         case "analyze":

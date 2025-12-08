@@ -193,19 +193,45 @@ CRITICAL DJ REQUIREMENTS:
    - Match duration to energy difference and genre
 
 ═══════════════════════════════════════════════════════════════
+CRITICAL: CROSSFADER AUTOMATION (MANDATORY!)
+═══════════════════════════════════════════════════════════════
+The crossfadeAutomation array controls the volume balance between decks:
+- value: 0.0 = 100% Deck A, 0% Deck B (A is fully audible, B is silent)
+- value: 0.5 = 50% Deck A, 50% Deck B (both at equal volume)
+- value: 1.0 = 0% Deck A, 100% Deck B (A is silent, B is fully audible)
+
+REQUIRED CROSSFADER PATTERN (smooth fade from A to B):
+crossfadeAutomation: [
+  { t: 0.0, value: 0.0 },   // Start: 100% on Deck A
+  { t: 0.2, value: 0.1 },   // Begin bringing in B
+  { t: 0.4, value: 0.3 },   // Gradual blend
+  { t: 0.6, value: 0.7 },   // B becoming dominant
+  { t: 0.8, value: 0.9 },   // Almost fully on B
+  { t: 1.0, value: 1.0 }    // End: 100% on Deck B
+]
+
+You MUST include at least 4-6 crossfade points for a smooth transition!
+
+═══════════════════════════════════════════════════════════════
 EXAMPLE BASS SWAP TECHNIQUE:
 ═══════════════════════════════════════════════════════════════
-t=0.0:   Deck A: low=0,  Deck B: low=-12  (B bass cut completely)
-t=0.3:   Deck A: low=0,  Deck B: low=-12  (wait for phrase)
-t=0.5:   Deck A: low=-6, Deck B: low=-6   (swap bass midpoint)
-t=0.7:   Deck A: low=-12, Deck B: low=0   (B takes over bass)
-t=1.0:   Deck A: low=-12, Deck B: low=0   (A bass cut completely)
+Crossfade (volume balance):
+t=0.0: crossfader=0.0   (100% A, 0% B)
+t=0.3: crossfader=0.2   (80% A, 20% B)
+t=0.5: crossfader=0.5   (50% A, 50% B)
+t=0.7: crossfader=0.8   (20% A, 80% B)
+t=1.0: crossfader=1.0   (0% A, 100% B)
 
-Crossfader moves gradually from 0 to 1 while bass swaps happen.
+EQ (bass swapping to avoid mud):
+t=0.0: Deck A: low=0,  Deck B: low=-12  (B bass cut completely)
+t=0.3: Deck A: low=0,  Deck B: low=-12  (wait for phrase)
+t=0.5: Deck A: low=-6, Deck B: low=-6   (swap bass midpoint)
+t=0.7: Deck A: low=-12, Deck B: low=0   (B takes over bass)
+t=1.0: Deck A: low=-12, Deck B: low=0   (A bass cut completely)
 
 ═══════════════════════════════════════════════════════════════
 
-Generate a professional, creative transition plan. Be bold with EQ, filters, and FX!`,
+Generate a professional, creative transition plan with SMOOTH crossfading!`,
       system: `You are a WORLD-CLASS professional DJ with 20+ years of experience. You understand:
 - Phrasing (8/16/32 bar structures in electronic music)
 - Beatmatching and harmonic mixing
@@ -215,13 +241,15 @@ Generate a professional, creative transition plan. Be bold with EQ, filters, and
 - Genre-specific mixing techniques
 
 RULES:
-1. ALWAYS use proper bass swapping - never have both tracks at full bass simultaneously
-2. ALWAYS consider timing - don't transition at bad moments
-3. Use tempo automation ONLY for beatmatching (±5% max for natural sound)
-4. Create SMOOTH automation curves (at least 3-5 points per parameter)
-5. Match technique to the energy difference and genres
-6. Be CREATIVE with filters and FX
+1. MANDATORY: Create smooth crossfadeAutomation from 0.0 → 1.0 with at least 5 points
+2. ALWAYS use proper bass swapping - never have both tracks at full bass simultaneously
+3. ALWAYS consider timing - don't transition at bad moments
+4. Use tempo automation ONLY for beatmatching (±5% max for natural sound)
+5. Create SMOOTH automation curves (at least 4-6 points per parameter)
+6. Match technique to the energy difference and genres
+7. Be CREATIVE with filters and FX
 
+The crossfader is the MOST IMPORTANT automation - without it, both tracks play at full volume!
 Your transitions should sound professional and maintain dancefloor energy.`,
     })
 

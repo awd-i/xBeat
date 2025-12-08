@@ -11,6 +11,7 @@ export interface TransitionState {
   currentValues: {
     crossfader: number
     filterCutoff: number
+    filterQ: number
     reverb: number
     delay: number
   }
@@ -96,6 +97,7 @@ export class MusicEngine {
     currentValues: {
       crossfader: 0.5,
       filterCutoff: 20000,
+      filterQ: 1,
       reverb: 0,
       delay: 0,
     },
@@ -518,9 +520,24 @@ export class MusicEngine {
   }
 
   applyTransitionPlan(plan: TransitionPlan): void {
+    // SAFETY CHECK: Ensure crossfade automation exists and goes from 0 to 1
+    if (!plan.crossfadeAutomation || plan.crossfadeAutomation.length < 2) {
+      console.warn("[v0] MusicEngine: Invalid crossfade automation, using default")
+      plan.crossfadeAutomation = [
+        { t: 0.0, value: 0.0 },
+        { t: 0.2, value: 0.1 },
+        { t: 0.4, value: 0.3 },
+        { t: 0.6, value: 0.7 },
+        { t: 0.8, value: 0.9 },
+        { t: 1.0, value: 1.0 },
+      ]
+    }
+    
     console.log("[v0] MusicEngine: Starting transition plan execution", {
       duration: plan.durationSeconds,
       crossfadePoints: plan.crossfadeAutomation.length,
+      crossfadeStart: plan.crossfadeAutomation[0]?.value,
+      crossfadeEnd: plan.crossfadeAutomation[plan.crossfadeAutomation.length - 1]?.value,
       hasFilterAutomation: !!plan.filterAutomation,
       hasFxAutomation: !!plan.fxAutomation,
     })
@@ -533,6 +550,13 @@ export class MusicEngine {
     const startTime = Date.now()
     const duration = plan.durationSeconds * 1000
 
+    // Get initial values from automation curves
+    const initialCrossfader = this.interpolateAutomation(plan.crossfadeAutomation, 0)
+    
+    // CRITICAL: Immediately set the crossfader to the starting position
+    console.log(`[v0] MusicEngine: Setting initial crossfader to ${initialCrossfader.toFixed(3)}`)
+    this.setCrossfade(initialCrossfader)
+
     // Initialize transition state
     this.transitionState = {
       isActive: true,
@@ -540,10 +564,13 @@ export class MusicEngine {
       startTime,
       duration: plan.durationSeconds,
       currentValues: {
-        crossfader: this.interpolateAutomation(plan.crossfadeAutomation, 0),
+        crossfader: initialCrossfader,
         filterCutoff: plan.filterAutomation?.length
           ? this.interpolateAutomation(plan.filterAutomation.map((p) => ({ t: p.t, value: p.cutoff })), 0)
           : 20000,
+        filterQ: plan.filterAutomation?.length
+          ? this.interpolateAutomation(plan.filterAutomation.map((p) => ({ t: p.t, value: p.q })), 0)
+          : 1,
         reverb: plan.fxAutomation?.length
           ? this.interpolateAutomation(plan.fxAutomation.map((p) => ({ t: p.t, value: p.reverb })), 0)
           : 0,
@@ -561,16 +588,27 @@ export class MusicEngine {
       // Interpolate crossfade
       const crossfadeValue = this.interpolateAutomation(plan.crossfadeAutomation, progress)
       this.setCrossfade(crossfadeValue)
+      
+      // Log every 10% progress
+      if (Math.floor(progress * 10) !== Math.floor((progress - 0.02) * 10)) {
+        console.log(`[v0] Transition ${(progress * 100).toFixed(0)}%: crossfader=${crossfadeValue.toFixed(3)}`)
+      }
 
       // Interpolate filter if present
       let filterCutoff = 20000
+      let filterQ = 1
       if (plan.filterAutomation?.length) {
         filterCutoff = this.interpolateAutomation(
           plan.filterAutomation.map((p) => ({ t: p.t, value: p.cutoff })),
           progress,
         )
+        filterQ = this.interpolateAutomation(
+          plan.filterAutomation.map((p) => ({ t: p.t, value: p.q })),
+          progress,
+        )
         if (this.filter && isFinite(filterCutoff)) {
           this.filter.frequency.value = filterCutoff
+          if (isFinite(filterQ)) this.filter.Q.value = filterQ
         }
       }
 
@@ -613,6 +651,19 @@ export class MusicEngine {
         }
       }
 
+      // CRITICAL: Update musicObject to force React state updates (creates new object reference)
+      this.musicObject = {
+        ...this.musicObject,
+        crossfader: crossfadeValue,
+        filter: {
+          ...this.musicObject.filter,
+          cutoff: filterCutoff,
+          q: filterQ,
+        },
+        reverbAmount: reverbValue,
+        delayAmount: delayValue,
+      }
+
       // Update transition state
       this.transitionState = {
         isActive: progress < 1,
@@ -622,6 +673,7 @@ export class MusicEngine {
         currentValues: {
           crossfader: crossfadeValue,
           filterCutoff,
+          filterQ,
           reverb: reverbValue,
           delay: delayValue,
         },
