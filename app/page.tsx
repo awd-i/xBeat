@@ -42,7 +42,7 @@ export default function DJSystem() {
   const [trackA, setTrackA] = useState<Track | null>(null)
   const [trackB, setTrackB] = useState<Track | null>(null)
   const [showLibrary, setShowLibrary] = useState(true)
-  const [controlsExpanded, setControlsExpanded] = useState(true)
+  const [controlsExpanded, setControlsExpanded] = useState(false)
   const [activePanel, setActivePanel] = useState<"dj" | "grok">("grok")
   const [bpmA, setBpmA] = useState<number | null>(null)
   const [bpmB, setBpmB] = useState<number | null>(null)
